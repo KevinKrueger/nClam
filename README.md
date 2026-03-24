@@ -17,6 +17,38 @@ For installation and platform-specific setup, use the official ClamAV docs and r
 nClam communicates with clamd via the standard protocol commands `PING`, `VERSION`, and `INSTREAM`.
 Because of this, it is generally compatible with current ClamAV releases that support the clamd protocol.
 
+## Docker Compose
+If you want to run ClamAV locally with Docker Compose, this repository includes a ready-to-use `docker-compose.yml`.
+
+Start ClamAV:
+
+```bash
+docker compose up -d
+```
+
+Follow logs until clamd is ready:
+
+```bash
+docker compose logs -f clamav
+```
+
+Stop it again:
+
+```bash
+docker compose down
+```
+
+### C# connection settings
+- If your .NET app runs on your host machine: use `localhost:3310`.
+- If your .NET app runs as another Compose service in the same Compose network: use `clamav:3310` (service name as host).
+
+Minimal connectivity check:
+
+```csharp
+var clam = new ClamClient("localhost", 3310);
+var isReady = await clam.TryPingAsync();
+```
+
 ## NuGet Package
 
     Install-Package nClam

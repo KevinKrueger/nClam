@@ -1,0 +1,7 @@
+services:
+  clamav:
+    image: clamav/clamav:1.5
+    container_name: nclam-clamav
+    restart: unless-stopped
+    ports:
+      - "3310:3310"

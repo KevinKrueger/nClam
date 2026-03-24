@@ -2,7 +2,20 @@
 nClam is a tiny library which helps you scan files or directories using a ClamAV server.  It contains a simple API which encapsulates the communication with the ClamAV server as well as the parsing of its results.  The library is licensed under the Apache License 2.0.
 
 ## Dependencies
-ClamAV Server, also known as clamd.  It is a free, open-source virus scanner.  Win32 ports can be obtained here: http://oss.netfarm.it/clamav/
+ClamAV Server, also known as clamd. It is a free, open-source virus scanner.
+
+Current stable release lines (as of 2026-03):
+- 1.5.x (latest: 1.5.2)
+- 1.4.x (latest: 1.4.4)
+- 1.0.x LTS (latest: 1.0.9)
+
+For installation and platform-specific setup, use the official ClamAV docs and release pages:
+- https://docs.clamav.net/
+- https://github.com/Cisco-Talos/clamav/releases
+
+## Compatibility Notes
+nClam communicates with clamd via the standard protocol commands `PING`, `VERSION`, and `INSTREAM`.
+Because of this, it is generally compatible with current ClamAV releases that support the clamd protocol.
 
 ## NuGet Package
 

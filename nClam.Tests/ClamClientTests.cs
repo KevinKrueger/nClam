@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
+using NUnit.Framework;
 
 namespace nClam.Tests
 {
@@ -91,365 +91,366 @@ namespace nClam.Tests
         }
     }
 
+    [TestFixture]
     public class ClamClientTests
     {
         #region Interface verification
 
-        [Fact]
+        [Test]
         public void ClamClient_Implements_IClamClient()
         {
             var client = new ClamClient("localhost");
-            Assert.IsAssignableFrom<IClamClient>(client);
+            Assert.That(client, Is.AssignableTo<IClamClient>());
         }
 
         #endregion
 
         #region PingAsync
 
-        [Fact]
+        [Test]
         public async Task PingAsync_ReturnsTrue_WhenServerRespondsPong()
         {
             var client = new TestableClamClient("PONG\0");
             var result = await client.PingAsync();
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
-        [Fact]
+        [Test]
         public async Task PingAsync_ReturnsFalse_WhenServerRespondsOther()
         {
             var client = new TestableClamClient("INVALID\0");
             var result = await client.PingAsync();
-            Assert.False(result);
+            Assert.That(result, Is.False);
         }
 
-        [Fact]
+        [Test]
         public async Task PingAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("PONG\0");
             using var cts = new CancellationTokenSource();
             var result = await client.PingAsync(cts.Token);
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
         #endregion
 
         #region TryPingAsync
 
-        [Fact]
+        [Test]
         public async Task TryPingAsync_ReturnsTrue_WhenServerRespondsPong()
         {
             var client = new TestableClamClient("PONG\0");
             var result = await client.TryPingAsync();
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
-        [Fact]
+        [Test]
         public async Task TryPingAsync_ReturnsFalse_WhenServerRespondsOther()
         {
             var client = new TestableClamClient("INVALID\0");
             var result = await client.TryPingAsync();
-            Assert.False(result);
+            Assert.That(result, Is.False);
         }
 
-        [Fact]
+        [Test]
         public async Task TryPingAsync_ReturnsFalse_WhenConnectionFails()
         {
             var client = new FailingClamClient();
             var result = await client.TryPingAsync();
-            Assert.False(result);
+            Assert.That(result, Is.False);
         }
 
-        [Fact]
+        [Test]
         public async Task TryPingAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("PONG\0");
             using var cts = new CancellationTokenSource();
             var result = await client.TryPingAsync(cts.Token);
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
         #endregion
 
         #region GetVersionAsync
 
-        [Fact]
+        [Test]
         public async Task GetVersionAsync_ReturnsVersionString()
         {
             var client = new TestableClamClient("ClamAV 1.0.0/12345/Mon Jan 1 00:00:00 2024\0");
             var result = await client.GetVersionAsync();
-            Assert.Equal("ClamAV 1.0.0/12345/Mon Jan 1 00:00:00 2024", result);
+            Assert.That(result, Is.EqualTo("ClamAV 1.0.0/12345/Mon Jan 1 00:00:00 2024"));
         }
 
-        [Fact]
+        [Test]
         public async Task GetVersionAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("ClamAV 1.4.4\0");
             using var cts = new CancellationTokenSource();
             var result = await client.GetVersionAsync(cts.Token);
-            Assert.Equal("ClamAV 1.4.4", result);
+            Assert.That(result, Is.EqualTo("ClamAV 1.4.4"));
         }
 
         #endregion
 
         #region GetStatsAsync
 
-        [Fact]
+        [Test]
         public async Task GetStatsAsync_ReturnsStatsString()
         {
             var stats = "POOLS: 1\nSTATE: VALID PRIMARY\nTHREADS: live 1  idle 0 max 10\nQUEUE: 0 items\n";
             var client = new TestableClamClient(stats + "\0");
             var result = await client.GetStatsAsync();
-            Assert.Equal(stats, result);
+            Assert.That(result, Is.EqualTo(stats));
         }
 
-        [Fact]
+        [Test]
         public async Task GetStatsAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("STATS_DATA\0");
             using var cts = new CancellationTokenSource();
             var result = await client.GetStatsAsync(cts.Token);
-            Assert.Equal("STATS_DATA", result);
+            Assert.That(result, Is.EqualTo("STATS_DATA"));
         }
 
         #endregion
 
         #region ScanFileOnServerAsync
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerAsync_Clean()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             var result = await client.ScanFileOnServerAsync("/test/file.txt");
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerAsync_VirusDetected()
         {
             var client = new TestableClamClient("/test/file.txt: Eicar-Test-Signature FOUND\0");
             var result = await client.ScanFileOnServerAsync("/test/file.txt");
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Single(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerAsync_Error()
         {
             var client = new TestableClamClient("/test/nonexistent: lstat() failed: No such file or directory. ERROR\0");
             var result = await client.ScanFileOnServerAsync("/test/nonexistent");
-            Assert.Equal(ClamScanResults.Error, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Error));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             using var cts = new CancellationTokenSource();
             var result = await client.ScanFileOnServerAsync("/test/file.txt", cts.Token);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
         #endregion
 
         #region ScanFileOnServerMultithreadedAsync
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerMultithreadedAsync_Clean()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             var result = await client.ScanFileOnServerMultithreadedAsync("/test/file.txt");
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerMultithreadedAsync_VirusDetected()
         {
             var client = new TestableClamClient("/test/file.txt: Eicar-Test-Signature FOUND\0");
             var result = await client.ScanFileOnServerMultithreadedAsync("/test/file.txt");
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerMultithreadedAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             using var cts = new CancellationTokenSource();
             var result = await client.ScanFileOnServerMultithreadedAsync("/test/file.txt", cts.Token);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
         #endregion
 
         #region ContScanFileOnServerAsync
 
-        [Fact]
+        [Test]
         public async Task ContScanFileOnServerAsync_Clean()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             var result = await client.ContScanFileOnServerAsync("/test/file.txt");
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task ContScanFileOnServerAsync_VirusDetected_MultipleFiles()
         {
             var response = "/dir/file1.exe: Win.Trojan.Agent FOUND\n/dir/file2.doc: Doc.Malware.Macro FOUND\0";
             var client = new TestableClamClient(response);
             var result = await client.ContScanFileOnServerAsync("/dir");
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Equal(2, result.InfectedFiles.Count);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(2));
         }
 
-        [Fact]
+        [Test]
         public async Task ContScanFileOnServerAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             using var cts = new CancellationTokenSource();
             var result = await client.ContScanFileOnServerAsync("/test/file.txt", cts.Token);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
         #endregion
 
         #region AllMatchScanFileOnServerAsync
 
-        [Fact]
+        [Test]
         public async Task AllMatchScanFileOnServerAsync_Clean()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             var result = await client.AllMatchScanFileOnServerAsync("/test/file.txt");
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task AllMatchScanFileOnServerAsync_VirusDetected()
         {
             var client = new TestableClamClient("/test/file.exe: Win.Trojan.Agent FOUND\0");
             var result = await client.AllMatchScanFileOnServerAsync("/test/file.exe");
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Single(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
         }
 
-        [Fact]
+        [Test]
         public async Task AllMatchScanFileOnServerAsync_MultipleSignatures()
         {
             var response = "/test/file.exe: Win.Trojan.Agent FOUND\n/test/file.exe: Win.Adware.Generic FOUND\0";
             var client = new TestableClamClient(response);
             var result = await client.AllMatchScanFileOnServerAsync("/test/file.exe");
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Equal(2, result.InfectedFiles.Count);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(2));
         }
 
-        [Fact]
+        [Test]
         public async Task AllMatchScanFileOnServerAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("/test/file.txt: OK\0");
             using var cts = new CancellationTokenSource();
             var result = await client.AllMatchScanFileOnServerAsync("/test/file.txt", cts.Token);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
         #endregion
 
         #region SendAndScanFileAsync (byte[])
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ByteArray_Clean()
         {
             var client = new TestableClamClient("stream: OK\0");
             var result = await client.SendAndScanFileAsync(new byte[] { 1, 2, 3 });
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ByteArray_VirusDetected()
         {
             var client = new TestableClamClient("stream: Win.Test.EICAR_HDB-1 FOUND\0");
             var data = Encoding.UTF8.GetBytes("test data");
             var result = await client.SendAndScanFileAsync(data);
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ByteArray_WithCancellationToken()
         {
             var client = new TestableClamClient("stream: OK\0");
             using var cts = new CancellationTokenSource();
             var result = await client.SendAndScanFileAsync(new byte[] { 1, 2, 3 }, cts.Token);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
         #endregion
 
         #region SendAndScanFileAsync (Stream)
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_Stream_Clean()
         {
             var client = new TestableClamClient("stream: OK\0");
             using var ms = new MemoryStream(new byte[] { 1, 2, 3 });
             var result = await client.SendAndScanFileAsync(ms);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_Stream_VirusDetected()
         {
             var client = new TestableClamClient("stream: Eicar-Signature FOUND\0");
             using var ms = new MemoryStream(Encoding.UTF8.GetBytes("suspicious content"));
             var result = await client.SendAndScanFileAsync(ms);
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_Stream_WithCancellationToken()
         {
             var client = new TestableClamClient("stream: OK\0");
             using var ms = new MemoryStream(new byte[] { 1, 2, 3 });
             using var cts = new CancellationTokenSource();
             var result = await client.SendAndScanFileAsync(ms, cts.Token);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
         #endregion
 
         #region SendAndScanFileAsync - MaxStreamSize exceeded
 
-        [Fact]
-        public async Task SendAndScanFileAsync_Stream_ThrowsWhenMaxStreamSizeExceeded()
+        [Test]
+        public void SendAndScanFileAsync_Stream_ThrowsWhenMaxStreamSizeExceeded()
         {
             var client = new TestableClamClient("stream: OK\0");
             client.MaxStreamSize = 5;
             using var ms = new MemoryStream(new byte[100]);
-            await Assert.ThrowsAsync<MaxStreamSizeExceededException>(
-                () => client.SendAndScanFileAsync(ms));
+            Assert.ThrowsAsync<MaxStreamSizeExceededException>(
+                async () => await client.SendAndScanFileAsync(ms));
         }
 
-        [Fact]
-        public async Task SendAndScanFileAsync_ByteArray_ThrowsWhenMaxStreamSizeExceeded()
+        [Test]
+        public void SendAndScanFileAsync_ByteArray_ThrowsWhenMaxStreamSizeExceeded()
         {
             var client = new TestableClamClient("stream: OK\0");
             client.MaxStreamSize = 5;
-            await Assert.ThrowsAsync<MaxStreamSizeExceededException>(
-                () => client.SendAndScanFileAsync(new byte[100]));
+            Assert.ThrowsAsync<MaxStreamSizeExceededException>(
+                async () => await client.SendAndScanFileAsync(new byte[100]));
         }
 
         #endregion
 
         #region ReloadVirusDatabaseAsync
 
-        [Fact]
+        [Test]
         public async Task ReloadVirusDatabaseAsync_CompletesSuccessfully()
         {
             var client = new TestableClamClient("RELOADING\0");
             await client.ReloadVirusDatabaseAsync();
         }
 
-        [Fact]
+        [Test]
         public async Task ReloadVirusDatabaseAsync_WithCancellationToken()
         {
             var client = new TestableClamClient("RELOADING\0");
@@ -461,7 +462,7 @@ namespace nClam.Tests
 
         #region Shutdown
 
-        [Fact]
+        [Test]
         public async Task Shutdown_CompletesSuccessfully()
         {
             var client = new TestableClamClient("\0");
@@ -473,141 +474,141 @@ namespace nClam.Tests
 
         #region Command protocol format
 
-        [Fact]
+        [Test]
         public async Task PingAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("PONG\0");
             await client.PingAsync();
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zPING\0", sent);
+            Assert.That(sent, Does.StartWith("zPING\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task GetVersionAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("ClamAV 1.0\0");
             await client.GetVersionAsync();
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zVERSION\0", sent);
+            Assert.That(sent, Does.StartWith("zVERSION\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task GetStatsAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("stats\0");
             await client.GetStatsAsync();
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zSTATS\0", sent);
+            Assert.That(sent, Does.StartWith("zSTATS\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("/path: OK\0");
             await client.ScanFileOnServerAsync("/path");
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zSCAN /path\0", sent);
+            Assert.That(sent, Does.StartWith("zSCAN /path\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerMultithreadedAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("/path: OK\0");
             await client.ScanFileOnServerMultithreadedAsync("/path");
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zMULTISCAN /path\0", sent);
+            Assert.That(sent, Does.StartWith("zMULTISCAN /path\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task ContScanFileOnServerAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("/path: OK\0");
             await client.ContScanFileOnServerAsync("/path");
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zCONTSCAN /path\0", sent);
+            Assert.That(sent, Does.StartWith("zCONTSCAN /path\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task AllMatchScanFileOnServerAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("/path: OK\0");
             await client.AllMatchScanFileOnServerAsync("/path");
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zALLMATCHSCAN /path\0", sent);
+            Assert.That(sent, Does.StartWith("zALLMATCHSCAN /path\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_SendsInstreamCommand()
         {
             var client = new TestableClamClient("stream: OK\0");
             await client.SendAndScanFileAsync(new byte[] { 1, 2, 3 });
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zINSTREAM\0", sent);
+            Assert.That(sent, Does.StartWith("zINSTREAM\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task ReloadVirusDatabaseAsync_SendsCorrectCommand()
         {
             var client = new TestableClamClient("RELOADING\0");
             await client.ReloadVirusDatabaseAsync();
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zRELOAD\0", sent);
+            Assert.That(sent, Does.StartWith("zRELOAD\0"));
         }
 
-        [Fact]
+        [Test]
         public async Task Shutdown_SendsCorrectCommand()
         {
             var client = new TestableClamClient("\0");
             await client.Shutdown(CancellationToken.None);
             var sent = client.LastStream!.GetWrittenString();
-            Assert.StartsWith("zSHUTDOWN\0", sent);
+            Assert.That(sent, Does.StartWith("zSHUTDOWN\0"));
         }
 
         #endregion
 
         #region Response null-character trimming
 
-        [Fact]
+        [Test]
         public async Task Response_NullCharacterIsTrimmed()
         {
             var client = new TestableClamClient("ClamAV 1.0\0\0\0");
             var result = await client.GetVersionAsync();
-            Assert.Equal("ClamAV 1.0", result);
-            Assert.DoesNotContain('\0', result);
+            Assert.That(result, Is.EqualTo("ClamAV 1.0"));
+            Assert.That(result.Contains('\0'), Is.False);
         }
 
-        [Fact]
+        [Test]
         public async Task Response_EmptyResponseHandled()
         {
             var client = new TestableClamClient("");
             var result = await client.GetVersionAsync();
-            Assert.Equal("", result);
+            Assert.That(result, Is.EqualTo(""));
         }
 
-        [Fact]
+        [Test]
         public async Task Response_OnlyNullCharacter_ReturnEmpty()
         {
             var client = new TestableClamClient("\0");
             var result = await client.GetVersionAsync();
-            Assert.Equal("", result);
+            Assert.That(result, Is.EqualTo(""));
         }
 
         #endregion
 
         #region UnknownClamResponseException
 
-        [Fact]
+        [Test]
         public void UnknownClamResponseException_ContainsResponse()
         {
             var ex = new UnknownClamResponseException("WEIRD RESPONSE");
-            Assert.Contains("WEIRD RESPONSE", ex.Message);
+            Assert.That(ex.Message, Does.Contain("WEIRD RESPONSE"));
         }
 
-        [Fact]
+        [Test]
         public void UnknownClamResponseException_IsException()
         {
             var ex = new UnknownClamResponseException("test");
-            Assert.IsAssignableFrom<Exception>(ex);
+            Assert.That(ex, Is.AssignableTo<Exception>());
         }
 
         #endregion

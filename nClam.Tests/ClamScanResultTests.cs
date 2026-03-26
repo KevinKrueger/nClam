@@ -2,269 +2,267 @@ using System;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
-using Xunit;
+using NUnit.Framework;
 
 namespace nClam.Tests
 {
+    [TestFixture]
     public class ClamScanResultTests
     {
-        [Fact]
+        [Test]
         public void OK_Response()
         {
             var result = new ClamScanResult(@"C:\test.txt: OK");
 
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public void Error_Response()
         {
             var result = new ClamScanResult("error");
 
-            Assert.Equal(ClamScanResults.Error, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Error));
         }
 
-        [Fact]
+        [Test]
         public void VirusDetected_Response()
         {
             var result = new ClamScanResult(@"\\?\C:\test.txt: Eicar-Test-Signature FOUND");
 
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
 
-            Assert.Single(result.InfectedFiles);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
 
-            Assert.Equal(@"\\?\C:\test.txt", result.InfectedFiles[0].FileName);
-            Assert.Equal(" Eicar-Test-Signature", result.InfectedFiles[0].VirusName);
+            Assert.That(result.InfectedFiles[0].FileName, Is.EqualTo(@"\\?\C:\test.txt"));
+            Assert.That(result.InfectedFiles[0].VirusName, Is.EqualTo(" Eicar-Test-Signature"));
         }
 
-        [Fact]
+        [Test]
         public void Non_Matching()
         {
             var result = new ClamScanResult(Guid.NewGuid().ToString());
 
-            Assert.Equal(ClamScanResults.Unknown, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Unknown));
         }
 
-        [Fact]
+        [Test]
         public void Before_Tests()
         {
-            Assert.Equal(
-                "test:test1",
-                ClamScanResult.ExtractFileName("test:test1:test2")
+            Assert.That(
+                ClamScanResult.ExtractFileName("test:test1:test2"),
+                Is.EqualTo("test:test1")
                 );
 
-            Assert.Equal(
-                "",
-                ClamScanResult.ExtractFileName("test")
+            Assert.That(
+                ClamScanResult.ExtractFileName("test"),
+                Is.EqualTo("")
                 );
 
-            Assert.Equal(
-                "test",
-                ClamScanResult.ExtractFileName("test:test1")
+            Assert.That(
+                ClamScanResult.ExtractFileName("test:test1"),
+                Is.EqualTo("test")
                 );
         }
 
-        [Fact]
+        [Test]
         public void After_Tests()
         {
             //current released behavior to have initial space
             //(probably a bug)
 
-            Assert.Equal(
-                " test1",
-                ClamScanResult.ExtractVirusName("test test1")
+            Assert.That(
+                ClamScanResult.ExtractVirusName("test test1"),
+                Is.EqualTo(" test1")
                 );
 
-            Assert.Equal(
-                " test2",
-                ClamScanResult.ExtractVirusName("test test1 test2")
+            Assert.That(
+                ClamScanResult.ExtractVirusName("test test1 test2"),
+                Is.EqualTo(" test2")
                 );
 
-            Assert.Equal(
-                "",
-                ClamScanResult.ExtractVirusName("test")
+            Assert.That(
+                ClamScanResult.ExtractVirusName("test"),
+                Is.EqualTo("")
                 );
         }
 
         #region ClamScanResult - Case Insensitivity
 
-        [Theory]
-        [InlineData(@"C:\test.txt: OK")]
-        [InlineData(@"C:\test.txt: ok")]
-        [InlineData(@"C:\test.txt: Ok")]
-        [InlineData(@"C:\test.txt: oK")]
+        [TestCase(@"C:\test.txt: OK")]
+        [TestCase(@"C:\test.txt: ok")]
+        [TestCase(@"C:\test.txt: Ok")]
+        [TestCase(@"C:\test.txt: oK")]
         public void OK_Response_CaseInsensitive(string rawResult)
         {
             var result = new ClamScanResult(rawResult);
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Theory]
-        [InlineData("some error")]
-        [InlineData("some ERROR")]
-        [InlineData("some Error")]
-        [InlineData("ERROR")]
+        [TestCase("some error")]
+        [TestCase("some ERROR")]
+        [TestCase("some Error")]
+        [TestCase("ERROR")]
         public void Error_Response_CaseInsensitive(string rawResult)
         {
             var result = new ClamScanResult(rawResult);
-            Assert.Equal(ClamScanResults.Error, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Error));
         }
 
-        [Theory]
-        [InlineData(@"C:\test.txt: Eicar-Test-Signature FOUND")]
-        [InlineData(@"C:\test.txt: Eicar-Test-Signature found")]
-        [InlineData(@"C:\test.txt: Eicar-Test-Signature Found")]
+        [TestCase(@"C:\test.txt: Eicar-Test-Signature FOUND")]
+        [TestCase(@"C:\test.txt: Eicar-Test-Signature found")]
+        [TestCase(@"C:\test.txt: Eicar-Test-Signature Found")]
         public void VirusDetected_Response_CaseInsensitive(string rawResult)
         {
             var result = new ClamScanResult(rawResult);
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
         #endregion
 
         #region ClamScanResult - RawResult and ToString
 
-        [Fact]
+        [Test]
         public void RawResult_IsPreserved()
         {
             var raw = @"C:\test.txt: OK";
             var result = new ClamScanResult(raw);
-            Assert.Equal(raw, result.RawResult);
+            Assert.That(result.RawResult, Is.EqualTo(raw));
         }
 
-        [Fact]
+        [Test]
         public void ToString_ReturnsRawResult()
         {
             var raw = @"C:\test.txt: Eicar-Test-Signature FOUND";
             var result = new ClamScanResult(raw);
-            Assert.Equal(raw, result.ToString());
+            Assert.That(result.ToString(), Is.EqualTo(raw));
         }
 
         #endregion
 
         #region ClamScanResult - InfectedFiles null checks
 
-        [Fact]
+        [Test]
         public void Clean_Result_InfectedFiles_IsNull()
         {
             var result = new ClamScanResult(@"C:\test.txt: OK");
-            Assert.Equal(ClamScanResults.Clean, result.Result);
-            Assert.Null(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result.InfectedFiles, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void Error_Result_InfectedFiles_IsNull()
         {
             var result = new ClamScanResult("some error");
-            Assert.Equal(ClamScanResults.Error, result.Result);
-            Assert.Null(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Error));
+            Assert.That(result.InfectedFiles, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void Unknown_Result_InfectedFiles_IsNull()
         {
             var result = new ClamScanResult("something completely unrecognized");
-            Assert.Equal(ClamScanResults.Unknown, result.Result);
-            Assert.Null(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Unknown));
+            Assert.That(result.InfectedFiles, Is.Null);
         }
 
         #endregion
 
         #region ClamScanResult - Multiple infected files
 
-        [Fact]
+        [Test]
         public void VirusDetected_MultipleFiles()
         {
             var raw = "/files/test1.exe: Win.Trojan.Agent FOUND\n/files/test2.doc: Doc.Malware.Macro FOUND";
             var result = new ClamScanResult(raw);
 
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Equal(2, result.InfectedFiles.Count);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(2));
 
-            Assert.Equal("/files/test1.exe", result.InfectedFiles[0].FileName);
-            Assert.Equal(" Win.Trojan.Agent", result.InfectedFiles[0].VirusName);
+            Assert.That(result.InfectedFiles[0].FileName, Is.EqualTo("/files/test1.exe"));
+            Assert.That(result.InfectedFiles[0].VirusName, Is.EqualTo(" Win.Trojan.Agent"));
 
-            Assert.Equal("/files/test2.doc", result.InfectedFiles[1].FileName);
-            Assert.Equal(" Doc.Malware.Macro", result.InfectedFiles[1].VirusName);
+            Assert.That(result.InfectedFiles[1].FileName, Is.EqualTo("/files/test2.doc"));
+            Assert.That(result.InfectedFiles[1].VirusName, Is.EqualTo(" Doc.Malware.Macro"));
         }
 
-        [Fact]
+        [Test]
         public void VirusDetected_StreamResult()
         {
             var result = new ClamScanResult("stream: Win.Test.EICAR_HDB-1 FOUND");
 
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Single(result.InfectedFiles);
-            Assert.Equal("stream", result.InfectedFiles[0].FileName);
-            Assert.Equal(" Win.Test.EICAR_HDB-1", result.InfectedFiles[0].VirusName);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
+            Assert.That(result.InfectedFiles[0].FileName, Is.EqualTo("stream"));
+            Assert.That(result.InfectedFiles[0].VirusName, Is.EqualTo(" Win.Test.EICAR_HDB-1"));
         }
 
         #endregion
 
         #region ClamScanResult - Edge cases
 
-        [Fact]
+        [Test]
         public void EmptyString_ReturnsUnknown()
         {
             var result = new ClamScanResult("");
-            Assert.Equal(ClamScanResults.Unknown, result.Result);
-            Assert.Null(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Unknown));
+            Assert.That(result.InfectedFiles, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void WhitespaceOnly_ReturnsUnknown()
         {
             var result = new ClamScanResult("   ");
-            Assert.Equal(ClamScanResults.Unknown, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Unknown));
         }
 
-        [Fact]
+        [Test]
         public void JustOK_ReturnsClean()
         {
             var result = new ClamScanResult("OK");
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public void JustFOUND_ReturnsVirusDetected()
         {
             var result = new ClamScanResult("FOUND");
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
         #endregion
 
         #region ExtractFileName - Edge cases
 
-        [Fact]
+        [Test]
         public void ExtractFileName_EmptyString_ReturnsEmpty()
         {
-            Assert.Equal("", ClamScanResult.ExtractFileName(""));
+            Assert.That(ClamScanResult.ExtractFileName(""), Is.EqualTo(""));
         }
 
-        [Fact]
+        [Test]
         public void ExtractFileName_ColonAtStart_ReturnsEmpty()
         {
-            Assert.Equal("", ClamScanResult.ExtractFileName(":value"));
+            Assert.That(ClamScanResult.ExtractFileName(":value"), Is.EqualTo(""));
         }
 
-        [Fact]
+        [Test]
         public void ExtractFileName_UncPath()
         {
-            Assert.Equal(
-                @"\\server\share\file.txt",
-                ClamScanResult.ExtractFileName(@"\\server\share\file.txt: virus")
+            Assert.That(
+                ClamScanResult.ExtractFileName(@"\\server\share\file.txt: virus"),
+                Is.EqualTo(@"\\server\share\file.txt")
                 );
         }
 
-        [Fact]
+        [Test]
         public void ExtractFileName_WindowsPathWithDrive()
         {
-            Assert.Equal(
-                @"C:\Users\test\file.txt",
-                ClamScanResult.ExtractFileName(@"C:\Users\test\file.txt: virus")
+            Assert.That(
+                ClamScanResult.ExtractFileName(@"C:\Users\test\file.txt: virus"),
+                Is.EqualTo(@"C:\Users\test\file.txt")
                 );
         }
 
@@ -272,136 +270,136 @@ namespace nClam.Tests
 
         #region ExtractVirusName - Edge cases
 
-        [Fact]
+        [Test]
         public void ExtractVirusName_EmptyString_ReturnsEmpty()
         {
-            Assert.Equal("", ClamScanResult.ExtractVirusName(""));
+            Assert.That(ClamScanResult.ExtractVirusName(""), Is.EqualTo(""));
         }
 
-        [Fact]
+        [Test]
         public void ExtractVirusName_NoSpaces_ReturnsEmpty()
         {
-            Assert.Equal("", ClamScanResult.ExtractVirusName("nospaces"));
+            Assert.That(ClamScanResult.ExtractVirusName("nospaces"), Is.EqualTo(""));
         }
 
-        [Fact]
+        [Test]
         public void ExtractVirusName_SpaceAtStart_ReturnsEmpty()
         {
             // Space at index 0 is not > 0, so returns empty
-            Assert.Equal("", ClamScanResult.ExtractVirusName(" virusname"));
+            Assert.That(ClamScanResult.ExtractVirusName(" virusname"), Is.EqualTo(""));
         }
 
         #endregion
 
         #region ClamScanInfectedFile
 
-        [Fact]
+        [Test]
         public void ClamScanInfectedFile_Properties_SetCorrectly()
         {
             var file = new ClamScanInfectedFile("test.txt", "Eicar");
-            Assert.Equal("test.txt", file.FileName);
-            Assert.Equal("Eicar", file.VirusName);
+            Assert.That(file.FileName, Is.EqualTo("test.txt"));
+            Assert.That(file.VirusName, Is.EqualTo("Eicar"));
         }
 
-        [Fact]
+        [Test]
         public void ClamScanInfectedFile_Record_Equality()
         {
             var file1 = new ClamScanInfectedFile("test.txt", "Eicar");
             var file2 = new ClamScanInfectedFile("test.txt", "Eicar");
-            Assert.Equal(file1, file2);
+            Assert.That(file1, Is.EqualTo(file2));
         }
 
-        [Fact]
+        [Test]
         public void ClamScanInfectedFile_Record_Inequality()
         {
             var file1 = new ClamScanInfectedFile("test.txt", "Eicar");
             var file2 = new ClamScanInfectedFile("other.txt", "Eicar");
-            Assert.NotEqual(file1, file2);
+            Assert.That(file1, Is.Not.EqualTo(file2));
         }
 
         #endregion
 
         #region ClamClient - Constructor and Defaults
 
-        [Fact]
+        [Test]
         public void ClamClient_StringConstructor_SetsProperties()
         {
             var client = new ClamClient("myserver", 9999);
-            Assert.Equal("myserver", client.Server);
-            Assert.Equal(9999, client.Port);
-            Assert.Null(client.ServerIP);
+            Assert.That(client.Server, Is.EqualTo("myserver"));
+            Assert.That(client.Port, Is.EqualTo(9999));
+            Assert.That(client.ServerIP, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_StringConstructor_DefaultPort()
         {
             var client = new ClamClient("myserver");
-            Assert.Equal(3310, client.Port);
+            Assert.That(client.Port, Is.EqualTo(3310));
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_IPConstructor_SetsProperties()
         {
             var ip = IPAddress.Parse("192.168.1.1");
             var client = new ClamClient(ip, 5555);
-            Assert.Equal(ip, client.ServerIP);
-            Assert.Equal(5555, client.Port);
-            Assert.Null(client.Server);
+            Assert.That(client.ServerIP, Is.EqualTo(ip));
+            Assert.That(client.Port, Is.EqualTo(5555));
+            Assert.That(client.Server, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_IPConstructor_DefaultPort()
         {
             var client = new ClamClient(IPAddress.Loopback);
-            Assert.Equal(3310, client.Port);
+            Assert.That(client.Port, Is.EqualTo(3310));
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_DefaultMaxChunkSize()
         {
             var client = new ClamClient("localhost");
-            Assert.Equal(131072, client.MaxChunkSize);
+            Assert.That(client.MaxChunkSize, Is.EqualTo(131072));
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_DefaultMaxStreamSize()
         {
             var client = new ClamClient("localhost");
-            Assert.Equal(26214400, client.MaxStreamSize);
+            Assert.That(client.MaxStreamSize, Is.EqualTo(26214400));
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_MaxChunkSize_CanBeChanged()
         {
             var client = new ClamClient("localhost");
             client.MaxChunkSize = 65536;
-            Assert.Equal(65536, client.MaxChunkSize);
+            Assert.That(client.MaxChunkSize, Is.EqualTo(65536));
         }
 
-        [Fact]
+        [Test]
         public void ClamClient_MaxStreamSize_CanBeChanged()
         {
             var client = new ClamClient("localhost");
             client.MaxStreamSize = 10_000_000;
-            Assert.Equal(10_000_000, client.MaxStreamSize);
+            Assert.That(client.MaxStreamSize, Is.EqualTo(10_000_000));
         }
 
         #endregion
 
         #region MaxStreamSizeExceededException
 
-        [Fact]
+        [Test]
         public void MaxStreamSizeExceededException_ContainsSize()
         {
             var ex = new MaxStreamSizeExceededException(1024);
-            Assert.Contains("1024", ex.Message);
+            Assert.That(ex.Message, Does.Contain("1024"));
         }
 
-        [Fact]
+        [Test]
         public void MaxStreamSizeExceededException_IsException()
         {
             var ex = new MaxStreamSizeExceededException(5000);
-            Assert.IsAssignableFrom<Exception>(ex);
+            Assert.That(ex, Is.AssignableTo<Exception>());
         }
 
         #endregion

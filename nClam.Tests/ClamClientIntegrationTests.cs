@@ -1,236 +1,189 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
+using NUnit.Framework;
 
 namespace nClam.Tests
 {
-    /// <summary>
-    /// Integration tests that require a running ClamAV server on localhost:3310.
-    /// Start with: docker compose up -d
-    /// All tests use Trait("Category", "Integration") for selective execution.
-    /// </summary>
-    [Trait("Category", "Integration")]
-    public class ClamClientIntegrationTests : IAsyncLifetime
+    [TestFixture]
+    [Category("Integration")]
+    public class ClamClientIntegrationTests
     {
         private const string ClamHost = "localhost";
         private const int ClamPort = 3310;
-
-        // EICAR test string - an industry standard test pattern recognized by all AV engines
         private const string EicarTestString = @"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
 
         private ClamClient _client = null!;
         private bool _serverAvailable;
 
-        public async Task InitializeAsync()
+        [SetUp]
+        public async Task SetUp()
         {
             _client = new ClamClient(ClamHost, ClamPort);
             _serverAvailable = await _client.TryPingAsync();
         }
 
-        public Task DisposeAsync() => Task.CompletedTask;
-
         private void RequireServer()
         {
             if (!_serverAvailable)
-                throw new InvalidOperationException(
-                    $"ClamAV server not available at {ClamHost}:{ClamPort}. Start with: docker compose up -d");
+                Assert.Ignore($"ClamAV server not available at {ClamHost}:{ClamPort}. Start with: docker compose up -d");
         }
 
-        #region Ping
-
-        [Fact]
+        [Test]
         public async Task PingAsync_ReturnsTrue()
         {
             RequireServer();
             var result = await _client.PingAsync();
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
-        [Fact]
+        [Test]
         public async Task PingAsync_WithCancellationToken_ReturnsTrue()
         {
             RequireServer();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var result = await _client.PingAsync(cts.Token);
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
-        [Fact]
+        [Test]
         public async Task TryPingAsync_ReturnsTrue()
         {
             RequireServer();
             var result = await _client.TryPingAsync();
-            Assert.True(result);
+            Assert.That(result, Is.True);
         }
 
-        #endregion
-
-        #region Version
-
-        [Fact]
+        [Test]
         public async Task GetVersionAsync_ReturnsClamAVVersion()
         {
             RequireServer();
             var version = await _client.GetVersionAsync();
-
-            Assert.NotNull(version);
-            Assert.NotEmpty(version);
-            Assert.StartsWith("ClamAV", version);
+            Assert.That(version, Is.Not.Null);
+            Assert.That(version, Is.Not.Empty);
+            Assert.That(version, Does.StartWith("ClamAV"));
         }
 
-        [Fact]
+        [Test]
         public async Task GetVersionAsync_WithCancellationToken()
         {
             RequireServer();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var version = await _client.GetVersionAsync(cts.Token);
-
-            Assert.StartsWith("ClamAV", version);
+            Assert.That(version, Does.StartWith("ClamAV"));
         }
 
-        #endregion
-
-        #region Stats
-
-        [Fact]
+        [Test]
         public async Task GetStatsAsync_ReturnsStatistics()
         {
             RequireServer();
             var stats = await _client.GetStatsAsync();
-
-            Assert.NotNull(stats);
-            Assert.NotEmpty(stats);
-            Assert.Contains("POOLS", stats);
+            Assert.That(stats, Is.Not.Null);
+            Assert.That(stats, Is.Not.Empty);
+            Assert.That(stats, Does.Contain("POOLS"));
         }
 
-        #endregion
-
-        #region SendAndScanFileAsync - EICAR virus detection
-
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_Stream_DetectsEicar()
         {
             RequireServer();
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(EicarTestString));
             var result = await _client.SendAndScanFileAsync(stream);
-
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Single(result.InfectedFiles);
-            Assert.Contains("EICAR", result.InfectedFiles[0].VirusName, StringComparison.OrdinalIgnoreCase);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
+            Assert.That(result.InfectedFiles[0].VirusName.ToUpperInvariant(), Does.Contain("EICAR"));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ByteArray_DetectsEicar()
         {
             RequireServer();
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await _client.SendAndScanFileAsync(data);
-
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-            Assert.NotNull(result.InfectedFiles);
-            Assert.Single(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.InfectedFiles, Is.Not.Null);
+            Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_Stream_CleanData()
         {
             RequireServer();
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes("This is perfectly safe content."));
             var result = await _client.SendAndScanFileAsync(stream);
-
-            Assert.Equal(ClamScanResults.Clean, result.Result);
-            Assert.Null(result.InfectedFiles);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result.InfectedFiles, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ByteArray_CleanData()
         {
             RequireServer();
             var data = Encoding.UTF8.GetBytes("Completely harmless file content.");
             var result = await _client.SendAndScanFileAsync(data);
-
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_EmptyData_IsClean()
         {
             RequireServer();
             var result = await _client.SendAndScanFileAsync(Array.Empty<byte>());
-
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_WithCancellationToken()
         {
             RequireServer();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await _client.SendAndScanFileAsync(data, cts.Token);
-
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
-        #endregion
-
-        #region SendAndScanFileAsync - IP address connection
-
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ViaIPAddress_DetectsEicar()
         {
             RequireServer();
             var ipClient = new ClamClient(IPAddress.Loopback, ClamPort);
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await ipClient.SendAndScanFileAsync(data);
-
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_ViaIPAddress_CleanData()
         {
             RequireServer();
             var ipClient = new ClamClient(IPAddress.Loopback, ClamPort);
             var data = Encoding.UTF8.GetBytes("safe content");
             var result = await ipClient.SendAndScanFileAsync(data);
-
-            Assert.Equal(ClamScanResults.Clean, result.Result);
+            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
         }
 
-        #endregion
-
-        #region SendAndScanFileAsync - MaxStreamSize
-
-        [Fact]
-        public async Task SendAndScanFileAsync_ThrowsWhenMaxStreamSizeExceeded()
+        [Test]
+        public void SendAndScanFileAsync_ThrowsWhenMaxStreamSizeExceeded()
         {
             RequireServer();
             _client.MaxStreamSize = 10;
             var data = new byte[100];
-
-            await Assert.ThrowsAsync<MaxStreamSizeExceededException>(
-                () => _client.SendAndScanFileAsync(data));
+            Assert.ThrowsAsync<MaxStreamSizeExceededException>(
+                async () => await _client.SendAndScanFileAsync(data));
         }
 
-        #endregion
-
-        #region ReloadVirusDatabaseAsync
-
-        [Fact]
+        [Test]
         public async Task ReloadVirusDatabaseAsync_CompletesWithoutError()
         {
             RequireServer();
             await _client.ReloadVirusDatabaseAsync();
         }
 
-        [Fact]
+        [Test]
         public async Task ReloadVirusDatabaseAsync_WithCancellationToken()
         {
             RequireServer();
@@ -238,95 +191,66 @@ namespace nClam.Tests
             await _client.ReloadVirusDatabaseAsync(cts.Token);
         }
 
-        #endregion
-
-        #region ContScanFileOnServerAsync (INSTREAM-based verification)
-
-        [Fact]
-        public async Task ContScanFileOnServerAsync_SendsContScanCommand()
+        [Test]
+        public async Task ContScanFileOnServerAsync_NonExistentPath_ReturnsError()
         {
             RequireServer();
-            // CONTSCAN on a non-existent server path returns an error
             var result = await _client.ContScanFileOnServerAsync("/nonexistent_path_for_test");
-            // Should get error (path doesn't exist in container) or unknown
-            Assert.True(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown,
+            Assert.That(
+                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
                 $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
         }
 
-        #endregion
-
-        #region AllMatchScanFileOnServerAsync
-
-        [Fact]
-        public async Task AllMatchScanFileOnServerAsync_SendsAllMatchScanCommand()
+        [Test]
+        public async Task AllMatchScanFileOnServerAsync_NonExistentPath_ReturnsError()
         {
             RequireServer();
-            // ALLMATCHSCAN on a non-existent server path returns an error
             var result = await _client.AllMatchScanFileOnServerAsync("/nonexistent_path_for_test");
-            Assert.True(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown,
+            Assert.That(
+                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
                 $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
         }
 
-        #endregion
-
-        #region ScanFileOnServerAsync
-
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerAsync_NonExistentPath_ReturnsError()
         {
             RequireServer();
             var result = await _client.ScanFileOnServerAsync("/nonexistent_path_for_test");
-            Assert.True(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown,
+            Assert.That(
+                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
                 $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
         }
 
-        #endregion
-
-        #region ScanFileOnServerMultithreadedAsync
-
-        [Fact]
+        [Test]
         public async Task ScanFileOnServerMultithreadedAsync_NonExistentPath_ReturnsError()
         {
             RequireServer();
             var result = await _client.ScanFileOnServerMultithreadedAsync("/nonexistent_path_for_test");
-            Assert.True(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown,
+            Assert.That(
+                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
                 $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
         }
 
-        #endregion
-
-        #region RawResult verification
-
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_RawResult_ContainsStreamPrefix()
         {
             RequireServer();
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await _client.SendAndScanFileAsync(data);
-
-            Assert.Contains("stream", result.RawResult, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("FOUND", result.RawResult);
+            Assert.That(result.RawResult.ToUpperInvariant(), Does.Contain("STREAM"));
+            Assert.That(result.RawResult, Does.Contain("FOUND"));
         }
 
-        [Fact]
+        [Test]
         public async Task SendAndScanFileAsync_CleanData_RawResultContainsOK()
         {
             RequireServer();
             var data = Encoding.UTF8.GetBytes("safe");
             var result = await _client.SendAndScanFileAsync(data);
-
-            Assert.Contains("OK", result.RawResult);
+            Assert.That(result.RawResult, Does.Contain("OK"));
         }
 
-        #endregion
-
-        #region Multiple sequential scans
-
-        [Fact]
+        [Test]
         public async Task MultipleScans_InSequence_AllSucceed()
         {
             RequireServer();
@@ -334,34 +258,28 @@ namespace nClam.Tests
             var cleanData = Encoding.UTF8.GetBytes("clean content");
 
             var result1 = await _client.SendAndScanFileAsync(eicarData);
-            Assert.Equal(ClamScanResults.VirusDetected, result1.Result);
+            Assert.That(result1.Result, Is.EqualTo(ClamScanResults.VirusDetected));
 
             var result2 = await _client.SendAndScanFileAsync(cleanData);
-            Assert.Equal(ClamScanResults.Clean, result2.Result);
+            Assert.That(result2.Result, Is.EqualTo(ClamScanResults.Clean));
 
             var result3 = await _client.SendAndScanFileAsync(eicarData);
-            Assert.Equal(ClamScanResults.VirusDetected, result3.Result);
+            Assert.That(result3.Result, Is.EqualTo(ClamScanResults.VirusDetected));
         }
 
-        #endregion
-
-        #region Connection failure
-
-        [Fact]
+        [Test]
         public async Task TryPingAsync_WrongPort_ReturnsFalse()
         {
             var badClient = new ClamClient("localhost", 19999);
             var result = await badClient.TryPingAsync();
-            Assert.False(result);
+            Assert.That(result, Is.False);
         }
 
-        [Fact]
-        public async Task PingAsync_WrongPort_Throws()
+        [Test]
+        public void PingAsync_WrongPort_Throws()
         {
             var badClient = new ClamClient("localhost", 19999);
-            await Assert.ThrowsAnyAsync<Exception>(() => badClient.PingAsync());
+            Assert.CatchAsync<Exception>(async () => await badClient.PingAsync());
         }
-
-        #endregion
     }
 }

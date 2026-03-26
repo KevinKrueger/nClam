@@ -295,6 +295,44 @@ namespace nClam
         }
 
         /// <summary>
+        /// Scans a file/directory on the ClamAV Server, continuing to scan even after finding infected files.
+        /// </summary>
+        /// <param name="filePath">Path to the file/directory on the ClamAV server.</param>
+        public Task<ClamScanResult> ContScanFileOnServerAsync(string filePath)
+        {
+            return ContScanFileOnServerAsync(filePath, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Scans a file/directory on the ClamAV Server, continuing to scan even after finding infected files.
+        /// </summary>
+        /// <param name="filePath">Path to the file/directory on the ClamAV server.</param>
+        /// <param name="cancellationToken">cancellation token used for request</param>
+        public async Task<ClamScanResult> ContScanFileOnServerAsync(string filePath, CancellationToken cancellationToken)
+        {
+            return new ClamScanResult(await ExecuteClamCommandAsync($"CONTSCAN {filePath}", cancellationToken).ConfigureAwait(false));
+        }
+
+        /// <summary>
+        /// Scans a file/directory on the ClamAV Server, reporting all matching virus signatures per file.
+        /// </summary>
+        /// <param name="filePath">Path to the file/directory on the ClamAV server.</param>
+        public Task<ClamScanResult> AllMatchScanFileOnServerAsync(string filePath)
+        {
+            return AllMatchScanFileOnServerAsync(filePath, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Scans a file/directory on the ClamAV Server, reporting all matching virus signatures per file.
+        /// </summary>
+        /// <param name="filePath">Path to the file/directory on the ClamAV server.</param>
+        /// <param name="cancellationToken">cancellation token used for request</param>
+        public async Task<ClamScanResult> AllMatchScanFileOnServerAsync(string filePath, CancellationToken cancellationToken)
+        {
+            return new ClamScanResult(await ExecuteClamCommandAsync($"ALLMATCHSCAN {filePath}", cancellationToken).ConfigureAwait(false));
+        }
+
+        /// <summary>
         /// Sends the data to the ClamAV server as a stream.
         /// </summary>
         /// <param name="fileData">Byte array containing the data from a file.</param>
@@ -387,6 +425,22 @@ namespace nClam
         public async Task Shutdown(CancellationToken cancellationToken)
         {
             await ExecuteClamCommandAsync("SHUTDOWN", cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Instructs the ClamAV server to reload the virus signature databases.
+        /// </summary>
+        public Task ReloadVirusDatabaseAsync()
+        {
+            return ReloadVirusDatabaseAsync(CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Instructs the ClamAV server to reload the virus signature databases.
+        /// </summary>
+        public async Task ReloadVirusDatabaseAsync(CancellationToken cancellationToken)
+        {
+            await ExecuteClamCommandAsync("RELOAD", cancellationToken).ConfigureAwait(false);
         }
     }
 }

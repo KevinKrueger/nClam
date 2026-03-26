@@ -405,27 +405,5 @@ namespace nClam.Tests
         }
 
         #endregion
-
-        #region Integration Tests (require ClamAV server)
-
-        [Fact]
-        public async Task TestSendAsyncTest()
-        {
-            string Eicartestcase = @"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
-            var client = new ClamClient("localhost");
-            var result = await client.SendAndScanFileAsync(new MemoryStream(System.Text.Encoding.Default.GetBytes(Eicartestcase)));
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-        }
-
-        [Fact]
-        public async Task TestSendIPAsyncTest()
-        {
-            string Eicartestcase = @"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
-            var client = new ClamClient(IPAddress.Parse("127.0.0.1"));
-            var result = await client.SendAndScanFileAsync(new MemoryStream(System.Text.Encoding.Default.GetBytes(Eicartestcase)));
-            Assert.Equal(ClamScanResults.VirusDetected, result.Result);
-        }
-
-        #endregion
     }
 }

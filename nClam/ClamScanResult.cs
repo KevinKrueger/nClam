@@ -25,51 +25,40 @@ namespace nClam
         {
             RawResult = rawResult;
 
-            var resultLowered = rawResult.ToLowerInvariant();
-
-            if (resultLowered.EndsWith("ok"))
+            if (rawResult.EndsWith("ok", StringComparison.OrdinalIgnoreCase))
             {
                 Result = ClamScanResults.Clean;
             }
-            else if(resultLowered.EndsWith("error"))
+            else if (rawResult.EndsWith("error", StringComparison.OrdinalIgnoreCase))
             {
                 Result = ClamScanResults.Error;
             }
-            else if (resultLowered.EndsWith("found"))
+            else if (rawResult.EndsWith("found", StringComparison.OrdinalIgnoreCase))
             {
                 Result = ClamScanResults.VirusDetected;
 
                 var files = rawResult.Split(new[] {"FOUND"}, StringSplitOptions.RemoveEmptyEntries);
                 var infectedFiles = new List<ClamScanInfectedFile>();
-                foreach(var file in files)
+                foreach (var file in files)
                 {
                     var trimFile = file.Trim();
-                    var splitFile = trimFile.Split();
-                    
-                    infectedFiles.Add(new ClamScanInfectedFile(before(trimFile), after(trimFile)));
+                    infectedFiles.Add(new ClamScanInfectedFile(ExtractFileName(trimFile), ExtractVirusName(trimFile)));
                 }
 
                 InfectedFiles = new ReadOnlyCollection<ClamScanInfectedFile>(infectedFiles);
             }
         }
-        
-        public static string before(string s)
+
+        internal static string ExtractFileName(string s)
         {
-            int l = s.LastIndexOf(":");
-            if (l > 0)
-            {
-                return s.Substring(0, l);
-            }
-            return "";
+            int l = s.LastIndexOf(':');
+            return l > 0 ? s.Substring(0, l) : "";
         }
-        public static string after(string s)
+
+        internal static string ExtractVirusName(string s)
         {
-            int l = s.LastIndexOf(" ");
-            if (l > 0)
-            {
-                return s.Substring(l);
-            }
-            return "";
+            int l = s.LastIndexOf(' ');
+            return l > 0 ? s.Substring(l) : "";
         }
 
         public override string ToString()

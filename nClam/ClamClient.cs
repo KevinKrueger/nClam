@@ -78,36 +78,26 @@ namespace nClam
 #endif
             string result;
 
-            var clam = new TcpClient(AddressFamily.InterNetwork);
+            using var clam = new TcpClient(AddressFamily.InterNetwork);
 
-            try
+            using var stream = await CreateConnection(clam).ConfigureAwait(false);
+            var commandText = $"z{command}\0";
+            var commandBytes = Encoding.UTF8.GetBytes(commandText);
+            await stream.WriteAsync(commandBytes, 0, commandBytes.Length, cancellationToken).ConfigureAwait(false);
+
+            if (additionalCommand != null)
             {
-                using var stream = await CreateConnection(clam).ConfigureAwait(false);
-                var commandText = $"z{command}\0";
-                var commandBytes = Encoding.UTF8.GetBytes(commandText);
-                await stream.WriteAsync(commandBytes, 0, commandBytes.Length, cancellationToken).ConfigureAwait(false);
-
-                if (additionalCommand != null)
-                {
-                    await additionalCommand(stream, cancellationToken).ConfigureAwait(false);
-                }
-
-                using var reader = new StreamReader(stream);
-                result = await reader.ReadToEndAsync().ConfigureAwait(false);
-
-                if (!String.IsNullOrEmpty(result))
-                {
-                    //if we have a result, trim off the terminating null character
-                    result = result.TrimEnd('\0');
-                }
+                await additionalCommand(stream, cancellationToken).ConfigureAwait(false);
             }
-            finally
+
+            using var reader = new StreamReader(stream);
+            result = await reader.ReadToEndAsync().ConfigureAwait(false);
+
+            if (!String.IsNullOrEmpty(result))
             {
-                if (clam.Connected)
-                {
-                    clam.Close();
-                }
+                result = result.TrimEnd('\0');
             }
+
 #if DEBUG
             stopWatch.Stop();
             System.Diagnostics.Debug.WriteLine("Command {0} took: {1}", command, stopWatch.Elapsed);
@@ -125,24 +115,31 @@ namespace nClam
         {
             var streamSize = 0;
             int readByteCount;
-            var bytes = new byte[MaxChunkSize];
+            var bytes = ArrayPool<byte>.Shared.Rent(MaxChunkSize);
 
-            while ((readByteCount = await sourceData.ReadAsync(bytes, 0, MaxChunkSize, cancellationToken).ConfigureAwait(false)) > 0)
+            try
             {
-                streamSize += readByteCount;
-
-                if (streamSize > MaxStreamSize)
+                while ((readByteCount = await sourceData.ReadAsync(bytes, 0, MaxChunkSize, cancellationToken).ConfigureAwait(false)) > 0)
                 {
-                    throw new MaxStreamSizeExceededException(MaxStreamSize);
+                    streamSize += readByteCount;
+
+                    if (streamSize > MaxStreamSize)
+                    {
+                        throw new MaxStreamSizeExceededException(MaxStreamSize);
+                    }
+
+                    var readBytes = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(readByteCount));
+                    await clamStream.WriteAsync(readBytes, 0, readBytes.Length, cancellationToken).ConfigureAwait(false);
+                    await clamStream.WriteAsync(bytes, 0, readByteCount, cancellationToken).ConfigureAwait(false);
                 }
 
-                var readBytes = BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder(readByteCount));  //convert readByteCount to NetworkOrder!
-                await clamStream.WriteAsync(readBytes, 0, readBytes.Length, cancellationToken).ConfigureAwait(false);
-                await clamStream.WriteAsync(bytes, 0, readByteCount, cancellationToken).ConfigureAwait(false);
+                var newMessage = BitConverter.GetBytes(0);
+                await clamStream.WriteAsync(newMessage, 0, newMessage.Length, cancellationToken).ConfigureAwait(false);
             }
-
-            var newMessage = BitConverter.GetBytes(0);
-            await clamStream.WriteAsync(newMessage, 0, newMessage.Length, cancellationToken).ConfigureAwait(false);
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(bytes);
+            }
         }
 #if NETSTANDARD2_1_OR_GREATER
         /// <summary>
@@ -192,11 +189,9 @@ namespace nClam
         /// <summary>
         /// Gets the ClamAV server version
         /// </summary>
-        public async Task<string> GetVersionAsync(CancellationToken cancellationToken)
+        public Task<string> GetVersionAsync(CancellationToken cancellationToken)
         {
-            var version = await ExecuteClamCommandAsync("VERSION", cancellationToken).ConfigureAwait(false);
-
-            return version;
+            return ExecuteClamCommandAsync("VERSION", cancellationToken);
         }
 
         /// <summary>
@@ -210,11 +205,9 @@ namespace nClam
         /// <summary>
         /// Gets the ClamAV server stats
         /// </summary>
-        public async Task<string> GetStatsAsync(CancellationToken cancellationToken)
+        public Task<string> GetStatsAsync(CancellationToken cancellationToken)
         {
-            var stats = await ExecuteClamCommandAsync("STATS", cancellationToken).ConfigureAwait(false);
-
-            return stats;
+            return ExecuteClamCommandAsync("STATS", cancellationToken);
         }
 
         /// <summary>
@@ -235,7 +228,7 @@ namespace nClam
         public async Task<bool> PingAsync(CancellationToken cancellationToken)
         {
             var result = await ExecuteClamCommandAsync("PING", cancellationToken).ConfigureAwait(false);
-            return result.ToLowerInvariant() == "pong";
+            return string.Equals(result, "PONG", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -256,7 +249,7 @@ namespace nClam
             try
             {
                 var result = await ExecuteClamCommandAsync("PING", cancellationToken).ConfigureAwait(false);
-                return result.ToLowerInvariant() == "pong";
+                return string.Equals(result, "PONG", StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
@@ -319,7 +312,7 @@ namespace nClam
         /// <returns></returns>
         public async Task<ClamScanResult> SendAndScanFileAsync(byte[] fileData, CancellationToken cancellationToken)
         {
-            var sourceStream = new MemoryStream(fileData);
+            using var sourceStream = new MemoryStream(fileData);
             return new ClamScanResult(await ExecuteClamCommandAsync("INSTREAM", cancellationToken, (stream, token) => SendStreamFileChunksAsync(sourceStream, stream, token)).ConfigureAwait(false));
         }
 

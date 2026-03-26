@@ -1,7 +1,6 @@
 namespace nClam
 {
     using System;
-    using System.Buffers;
     using System.IO;
     using System.Net;
     using System.Net.Sockets;
@@ -115,31 +114,24 @@ namespace nClam
         {
             var streamSize = 0;
             int readByteCount;
-            var bytes = ArrayPool<byte>.Shared.Rent(MaxChunkSize);
+            var bytes = new byte[MaxChunkSize];
 
-            try
+            while ((readByteCount = await sourceData.ReadAsync(bytes, 0, MaxChunkSize, cancellationToken).ConfigureAwait(false)) > 0)
             {
-                while ((readByteCount = await sourceData.ReadAsync(bytes, 0, MaxChunkSize, cancellationToken).ConfigureAwait(false)) > 0)
+                streamSize += readByteCount;
+
+                if (streamSize > MaxStreamSize)
                 {
-                    streamSize += readByteCount;
-
-                    if (streamSize > MaxStreamSize)
-                    {
-                        throw new MaxStreamSizeExceededException(MaxStreamSize);
-                    }
-
-                    var readBytes = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(readByteCount));
-                    await clamStream.WriteAsync(readBytes, 0, readBytes.Length, cancellationToken).ConfigureAwait(false);
-                    await clamStream.WriteAsync(bytes, 0, readByteCount, cancellationToken).ConfigureAwait(false);
+                    throw new MaxStreamSizeExceededException(MaxStreamSize);
                 }
 
-                var newMessage = BitConverter.GetBytes(0);
-                await clamStream.WriteAsync(newMessage, 0, newMessage.Length, cancellationToken).ConfigureAwait(false);
+                var readBytes = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(readByteCount));
+                await clamStream.WriteAsync(readBytes, 0, readBytes.Length, cancellationToken).ConfigureAwait(false);
+                await clamStream.WriteAsync(bytes, 0, readByteCount, cancellationToken).ConfigureAwait(false);
             }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(bytes);
-            }
+
+            var newMessage = BitConverter.GetBytes(0);
+            await clamStream.WriteAsync(newMessage, 0, newMessage.Length, cancellationToken).ConfigureAwait(false);
         }
 #if NETSTANDARD2_1_OR_GREATER
         /// <summary>

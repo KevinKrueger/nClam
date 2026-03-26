@@ -1,4 +1,4 @@
-﻿namespace nClam
+namespace nClam
 {
     /// <summary>
     /// The results of an infected file.

@@ -1,4 +1,4 @@
-﻿namespace nClam
+namespace nClam
 {
     using System;
     using System.Collections.Generic;

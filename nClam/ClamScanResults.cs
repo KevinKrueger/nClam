@@ -1,4 +1,4 @@
-﻿namespace nClam
+namespace nClam
 {
     public enum ClamScanResults
     {

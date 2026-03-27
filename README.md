@@ -87,9 +87,124 @@ class Program
 				Console.WriteLine("Woah an error occured! Error: {0}", scanResult.RawResult);
 				break;
 		}
-		
+
 	}
 }
+```
+
+## Batch Processing (Built-in)
+
+nClam includes comprehensive batch processing capabilities for scanning multiple files efficiently:
+
+### Quick Start - Batch Scanning
+```csharp
+using nClam;
+
+var clam = new ClamClient("localhost", 3310);
+
+// Method 1: Using extension methods (simplest)
+var results = await clam.BatchScanDirectoryAsync(@"C:\MyFolder", recursive: true);
+
+// Method 2: Using ClamBatchProcessor (more control)
+var processor = new ClamBatchProcessor(clam, maxConcurrency: 4);
+var results = await processor.ScanDirectoryAsync(@"C:\MyFolder", recursive: true);
+
+// Method 3: Scan specific file types only
+var results = await clam.BatchScanExecutableFilesAsync(@"C:\MyFolder", recursive: true);
+```
+
+### Batch Processing Features
+- ✅ **Concurrent Scanning**: Process multiple files simultaneously (configurable concurrency)
+- ✅ **Progress Tracking**: Real-time progress updates with callbacks
+- ✅ **Directory Scanning**: Recursive and non-recursive directory scanning
+- ✅ **File Filtering**: Scan by extensions or predefined categories (executables, documents, etc.)
+- ✅ **Connection Resilience**: Graceful handling of ClamAV daemon disconnections
+- ✅ **Timeout Management**: Configurable timeouts to prevent hanging operations
+- ✅ **Error Resilience**: Comprehensive error handling and reporting
+- ✅ **Result Analysis**: Built-in statistics, filtering, and export capabilities
+- ✅ **Memory Efficient**: Optimized for large file sets
+
+### Available Extension Methods
+```csharp
+// Scan multiple files
+await clam.BatchScanFilesAsync(filePaths);
+
+// Scan directory
+await clam.BatchScanDirectoryAsync(@"C:\MyFolder", recursive: true);
+
+// Scan by file extensions
+await clam.BatchScanByExtensionsAsync(@"C:\MyFolder", new[] {".exe", ".dll"});
+
+// Scan executable files only
+await clam.BatchScanExecutableFilesAsync(@"C:\MyFolder", recursive: true);
+
+// Scan high-risk files only
+await clam.BatchScanHighRiskFilesAsync(@"C:\MyFolder", recursive: true);
+```
+
+### Connection Resilience Example
+```csharp
+// Create processor with timeout to prevent hanging
+var processor = new ClamBatchProcessor(clam, 
+	maxConcurrency: 4, 
+	connectionTimeoutSeconds: 10);
+
+// Always check connection before batch operations
+if (!await clam.TryPingAsync())
+{
+	Console.WriteLine("ClamAV daemon is not available");
+	return;
+}
+
+// Batch processing will gracefully handle connection failures
+var results = await processor.ScanDirectoryAsync(@"C:\MyFolder");
+
+// Check for connection-related failures
+var connectionErrors = results.Where(r => 
+	r.ErrorMessage?.Contains("Connection") == true);
+
+if (connectionErrors.Any())
+{
+	Console.WriteLine($"{connectionErrors.Count()} files failed due to connection issues");
+}
+```
+```csharp
+var progress = new Progress<ClamBatchProgress>(p =>
+{
+	Console.WriteLine($"Progress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%)");
+	Console.WriteLine($"Current: {Path.GetFileName(p.CurrentFile)}");
+});
+
+var results = await clam.BatchScanDirectoryAsync(@"C:\MyFolder", 
+	recursive: true, 
+	progressCallback: progress);
+```
+
+### Result Analysis and Export
+```csharp
+// Get detailed statistics
+var stats = ClamBatchUtilities.GetStatistics(results);
+Console.WriteLine($"Clean: {stats.CleanFiles}, Infected: {stats.InfectedFiles}");
+Console.WriteLine($"Infection Rate: {stats.InfectionRate:F2}%");
+
+// Filter results
+var infectedFiles = ClamBatchUtilities.GetInfectedFiles(results);
+var cleanFiles = ClamBatchUtilities.GetCleanFiles(results);
+
+// Export to CSV for analysis
+await ClamBatchUtilities.SaveToCsvAsync(results, "scan_results.csv");
+
+// Generate detailed report
+var report = ClamBatchUtilities.GenerateReport(results, DateTime.Now);
+```
+
+### Predefined File Categories
+```csharp
+// Use built-in file extension categories
+ClamBatchUtilities.CommonExtensions.Executable  // .exe, .dll, .bat, etc.
+ClamBatchUtilities.CommonExtensions.Document    // .pdf, .docx, .xlsx, etc.
+ClamBatchUtilities.CommonExtensions.Archive     // .zip, .rar, .7z, etc.
+ClamBatchUtilities.CommonExtensions.HighRisk    // High-priority security scan targets
 ```
 
 # ClamAV Setup for Windows

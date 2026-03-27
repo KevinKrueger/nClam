@@ -16,7 +16,7 @@ class Program
 
         Console.Write("\t* Testing connectivity: ");
 
-        var clam = new ClamClient("localhost", 3310);
+        var clam = new ClamClient("localhost", 3310, 1_000_000_000);
         if (!await ClamDiagnostics.DisplayClamInfoAsync(clam))
         {
             Console.WriteLine("\n❌ Cannot proceed without ClamAV connection");

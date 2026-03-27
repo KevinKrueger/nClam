@@ -384,6 +384,34 @@ namespace nClam.Tests
             Assert.That(client.MaxStreamSize, Is.EqualTo(10_000_000));
         }
 
+        [Test]
+        public void ClamClient_StringConstructor_MaxStreamSize_SetsValue()
+        {
+            var client = new ClamClient("localhost", maxStreamSize: 104_857_600);
+            Assert.That(client.MaxStreamSize, Is.EqualTo(104_857_600));
+        }
+
+        [Test]
+        public void ClamClient_StringConstructor_MaxStreamSize_DefaultWhenNull()
+        {
+            var client = new ClamClient("localhost");
+            Assert.That(client.MaxStreamSize, Is.EqualTo(26214400));
+        }
+
+        [Test]
+        public void ClamClient_IPConstructor_MaxStreamSize_SetsValue()
+        {
+            var client = new ClamClient(IPAddress.Loopback, maxStreamSize: 104_857_600);
+            Assert.That(client.MaxStreamSize, Is.EqualTo(104_857_600));
+        }
+
+        [Test]
+        public void ClamClient_IPConstructor_MaxStreamSize_DefaultWhenNull()
+        {
+            var client = new ClamClient(IPAddress.Loopback);
+            Assert.That(client.MaxStreamSize, Is.EqualTo(26214400));
+        }
+
         #endregion
 
         #region MaxStreamSizeExceededException

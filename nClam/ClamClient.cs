@@ -46,10 +46,16 @@ namespace nClam
         /// </summary>
         /// <param name="server">Address to the ClamAV server</param>
         /// <param name="port">Port which the ClamAV server is listening on</param>
-        public ClamClient(string server, int port = 3310) : this()
+        /// <param name="maxStreamSize">Maximum size (in bytes) that can be streamed to the ClamAV server. If null, uses the default of 25 MB. Must match the StreamMaxLength setting on the ClamAV server.</param>
+        public ClamClient(string server, int port = 3310, long? maxStreamSize = null) : this()
         {
             Server = server;
             Port = port;
+
+            if (maxStreamSize.HasValue)
+            {
+                MaxStreamSize = maxStreamSize.Value;
+            }
         }
 
         /// <summary>
@@ -57,10 +63,16 @@ namespace nClam
         /// </summary>
         /// <param name="serverIP">IP Address to the ClamAV server</param>
         /// <param name="port">Port which the ClamAV server is listening on</param>
-        public ClamClient(IPAddress serverIP, int port = 3310) : this()
+        /// <param name="maxStreamSize">Maximum size (in bytes) that can be streamed to the ClamAV server. If null, uses the default of 25 MB. Must match the StreamMaxLength setting on the ClamAV server.</param>
+        public ClamClient(IPAddress serverIP, int port = 3310, long? maxStreamSize = null) : this()
         {
             ServerIP = serverIP;
             Port = port;
+
+            if (maxStreamSize.HasValue)
+            {
+                MaxStreamSize = maxStreamSize.Value;
+            }
         }
 
         /// <summary>

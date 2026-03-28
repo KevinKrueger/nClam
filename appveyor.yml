@@ -4,6 +4,4 @@ configuration: Release
 build_script:
   - ps: dotnet build -c Release -p:ContinuousIntegrationBuild=True
 test_script:
-  - ps: pushd nClam.Tests; dotnet test --no-build --no-restore; popd
-artifacts:
-  - path: nClam\bin\Release\*.nupkg
+  - ps: dotnet test -c Release --no-build --no-restore

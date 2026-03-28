@@ -1,217 +1,251 @@
-# nClam  #
-nClam is a tiny library which helps you scan files or directories using a ClamAV server.  It contains a simple API which encapsulates the communication with the ClamAV server as well as the parsing of its results.  The library is licensed under the Apache License 2.0.
+# VirusScanner
 
-## Dependencies
-ClamAV Server, also known as clamd. It is a free, open-source virus scanner.
+A .NET library for virus scanning with a **provider-agnostic** design. `VirusScanner.Core` defines the interfaces and models; any backend can implement them. `VirusScanner.ClamAV` ships the first-party [ClamAV](https://www.clamav.net/) provider. Licensed under the [MIT License](LICENSE).
+
+## Packages
+
+Two NuGet packages are published from this repository:
+
+| Package | Role | Target Frameworks |
+|---|---|---|
+| [`VirusScanner.Core`](https://www.nuget.org/packages/VirusScanner.Core) | Abstractions only – `IVirusScanner`, `IBatchProcessor`, shared models. No external dependencies. | `netstandard2.0`, `netstandard2.1`, `net10.0` |
+| [`VirusScanner.ClamAV`](https://www.nuget.org/packages/VirusScanner.ClamAV) | ClamAV provider – implements `IVirusScanner` against a `clamd` server. Depends on `VirusScanner.Core`. | `netstandard2.0`, `netstandard2.1`, `net10.0` |
+
+**Which package do I need?**
+
+- **Libraries / shared code** that should stay backend-independent → install only `VirusScanner.Core` and code against `IVirusScanner`.
+- **Applications** that use ClamAV → install only `VirusScanner.ClamAV`. `VirusScanner.Core` is pulled in automatically as a transitive dependency.
+
+```
+# Application – one package is enough, Core comes along automatically
+Install-Package VirusScanner.ClamAV
+
+# Library / shared project – abstractions only, no backend coupling
+Install-Package VirusScanner.Core
+```
+
+## ClamAV Dependency
+
+A running ClamAV (`clamd`) server is required. ClamAV is a free, open-source virus scanner.
 
 Current stable release lines (as of 2026-03):
 - 1.5.x (latest: 1.5.2)
 - 1.4.x (latest: 1.4.4)
 - 1.0.x LTS (latest: 1.0.9)
 
-For installation and platform-specific setup, use the official ClamAV docs and release pages:
-- https://docs.clamav.net/
-- https://github.com/Cisco-Talos/clamav/releases
+- Docs: https://docs.clamav.net/
+- Releases: https://github.com/Cisco-Talos/clamav/releases
 
-## Compatibility Notes
-nClam communicates with clamd via the standard protocol commands `PING`, `VERSION`, and `INSTREAM`.
-Because of this, it is generally compatible with current ClamAV releases that support the clamd protocol.
+Communication uses the standard clamd protocol commands `PING`, `VERSION`, and `INSTREAM`, so VirusScanner is compatible with any current ClamAV release that supports the clamd protocol.
 
 ## Docker Compose
-If you want to run ClamAV locally with Docker Compose, this repository includes a ready-to-use `docker-compose.yml`.
 
-Start ClamAV:
+This repository includes a ready-to-use `docker-compose.yml` to run ClamAV locally.
 
 ```bash
+# Start ClamAV
 docker compose up -d
-```
 
-Follow logs until clamd is ready:
-
-```bash
+# Follow logs until clamd is ready
 docker compose logs -f clamav
-```
 
-Stop it again:
-
-```bash
+# Stop
 docker compose down
 ```
 
-### C# connection settings
-- If your .NET app runs on your host machine: use `localhost:3310`.
-- If your .NET app runs as another Compose service in the same Compose network: use `clamav:3310` (service name as host).
+**Connection settings:**
+- .NET app running on the host machine → `localhost:3310`
+- .NET app running as a Compose service in the same network → `clamav:3310`
 
-Minimal connectivity check:
+## Quick Start
 
 ```csharp
-var clam = new ClamClient("localhost", 3310);
-var isReady = await clam.TryPingAsync();
+using VirusScanner.ClamAV;
+using VirusScanner.Core;
+
+var scanner = new ClamAvScanner("localhost", 3310);
+
+// Check connectivity
+bool isReady = await scanner.TryPingAsync();
+
+// Scan a file
+ScanResult result = await scanner.ScanAsync(@"C:\test.txt");
+
+switch (result.Status)
+{
+	case ScanStatus.Clean:
+		Console.WriteLine("The file is clean!");
+		break;
+	case ScanStatus.VirusDetected:
+		Console.WriteLine($"Virus found: {result.InfectedFiles![0].VirusName}");
+		break;
+	case ScanStatus.Error:
+		Console.WriteLine("Scan error.");
+		break;
+}
 ```
 
-## NuGet Package
+You can also construct `ClamAvScanner` with an `IPAddress`:
 
-	Install-Package nClam
-
-## Directions
-1. Add the nuget package to your project.
-2. Create a nClam.ClamClient object, passing it the hostname (or IP address) and port of the ClamAV server.
-3. Scan!
-
-# Code Example
 ```csharp
-using System;
-using System.Linq;
-using System.Net;
-using System.Threading.Tasks;
-using nClam;
+var scanner = new ClamAvScanner(IPAddress.Parse("127.0.0.1"), 3310);
+```
 
-class Program
+## Scanning Overloads
+
+`ClamAvScanner` implements `IVirusScanner` and supports scanning from multiple sources:
+
+```csharp
+// From a file path
+ScanResult result = await scanner.ScanAsync(@"C:\test.txt");
+
+// From a stream
+await using var stream = File.OpenRead(@"C:\test.txt");
+ScanResult result = await scanner.ScanAsync(stream);
+
+// From a byte array
+byte[] data = await File.ReadAllBytesAsync(@"C:\test.txt");
+ScanResult result = await scanner.ScanAsync(data);
+```
+
+## ClamAV-specific Operations
+
+```csharp
+// PING – throws if the server does not respond with PONG
+await scanner.PingAsync();
+
+// TryPing – returns false instead of throwing
+bool available = await scanner.TryPingAsync();
+
+// Server version string
+string version = await scanner.GetVersionAsync();
+
+// Server stats
+string stats = await scanner.GetStatsAsync();
+```
+
+## Batch Processing
+
+`VirusScanner.ClamAV` includes batch processing for scanning multiple files efficiently.
+
+### Extension Methods (simplest)
+
+```csharp
+// Scan a list of files
+IEnumerable<BatchScanResult> results = await scanner.BatchScanFilesAsync(filePaths);
+
+// Scan a directory
+IEnumerable<BatchScanResult> results = await scanner.BatchScanDirectoryAsync(
+	@"C:\MyFolder", recursive: true);
+
+// Scan by file extensions
+IEnumerable<BatchScanResult> results = await scanner.BatchScanByExtensionsAsync(
+	@"C:\MyFolder", new[] { ".exe", ".dll" });
+
+// Scan executable files only
+IEnumerable<BatchScanResult> results = await scanner.BatchScanExecutableFilesAsync(
+	@"C:\MyFolder", recursive: true);
+```
+
+### ClamAvBatchProcessor (more control)
+
+```csharp
+var processor = new ClamAvBatchProcessor(scanner, maxConcurrency: 4, connectionTimeoutSeconds: 10);
+
+IEnumerable<BatchScanResult> results = await processor.ScanDirectoryAsync(
+	@"C:\MyFolder", recursive: true);
+```
+
+### Progress Reporting
+
+```csharp
+var progress = new Progress<BatchProgress>(p =>
 {
-	static async Task Main(string[] args)
+	Console.WriteLine($"Progress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%)");
+	Console.WriteLine($"Current:  {p.CurrentFile}");
+});
+
+var results = await scanner.BatchScanDirectoryAsync(
+	@"C:\MyFolder",
+	recursive: true,
+	progressCallback: progress);
+```
+
+### Result Analysis
+
+```csharp
+// Generate a detailed text report
+string report = ClamAvBatchUtilities.GenerateReport(results, DateTime.Now);
+
+// Filter results
+var infected = results.Where(r => r.IsInfected);
+var errors   = results.Where(r => r.HasError);
+var clean    = results.Where(r => r.IsClean);
+```
+
+### Batch Processing Features
+
+- **Concurrent scanning** – configurable degree of parallelism
+- **Progress tracking** – real-time `IProgress<BatchProgress>` callbacks
+- **Directory scanning** – recursive and non-recursive
+- **File filtering** – by extension or predefined categories
+- **Connection resilience** – graceful handling of daemon disconnections
+- **Configurable timeouts** – prevent hanging operations
+- **Report generation** – built-in text report via `ClamAvBatchUtilities`
+
+## Project Structure
+
+| Project | Description |
+|---|---|
+| `VirusScanner.Core` | Abstractions: `IVirusScanner`, `IBatchProcessor`, `ScanResult`, `ScanStatus`, `BatchScanResult`, `BatchProgress`, `InfectedFile`, `ScanException` |
+| `VirusScanner.ClamAV` | ClamAV implementation: `ClamAvScanner`, `IClamAvScanner`, `ClamAvBatchProcessor`, `ClamAvBatchExtensions`, `ClamAvBatchUtilities` |
+| `VirusScanner.ConsoleTest` | Interactive console test application |
+| `VirusScanner.Tests` | Unit and integration tests |
+
+## Custom Providers
+
+Because all consuming code depends only on `IVirusScanner` from `VirusScanner.Core`, you can swap or add any backend without touching the rest of your application.
+
+```csharp
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using VirusScanner.Core;
+
+// Example: a provider that delegates to a proprietary REST API
+public class MyRestScanner : IVirusScanner
+{
+	public Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default)
+		=> /* call health endpoint */ Task.FromResult(true);
+
+	public Task<ScanResult> ScanAsync(byte[] data, CancellationToken cancellationToken = default)
+		=> ScanAsync(new MemoryStream(data), cancellationToken);
+
+	public async Task<ScanResult> ScanAsync(Stream data, CancellationToken cancellationToken = default)
 	{
-		var clam = new ClamClient("localhost", 3310);
-		// or var clam = new ClamClient(IPAddress.Parse("127.0.0.1"), 3310);
-		var scanResult = await clam.ScanFileOnServerAsync("C:\\test.txt");  //any file you would like!
+		// send stream to your API, parse response
+		return new ScanResult(ScanStatus.Clean);
+	}
 
-		switch (scanResult.Result)
-		{
-			case ClamScanResults.Clean:
-				Console.WriteLine("The file is clean!");
-				break;
-			case ClamScanResults.VirusDetected:
-				Console.WriteLine("Virus Found!");
-				Console.WriteLine("Virus name: {0}", scanResult.InfectedFiles.First().VirusName);
-				break;
-			case ClamScanResults.Error:
-				Console.WriteLine("Woah an error occured! Error: {0}", scanResult.RawResult);
-				break;
-		}
-
+	public async Task<ScanResult> ScanAsync(string filePath, CancellationToken cancellationToken = default)
+	{
+		await using var stream = File.OpenRead(filePath);
+		return await ScanAsync(stream, cancellationToken);
 	}
 }
 ```
 
-## Batch Processing (Built-in)
+Register it exactly like the built-in ClamAV provider:
 
-nClam includes comprehensive batch processing capabilities for scanning multiple files efficiently:
-
-### Quick Start - Batch Scanning
 ```csharp
-using nClam;
-
-var clam = new ClamClient("localhost", 3310);
-
-// Method 1: Using extension methods (simplest)
-var results = await clam.BatchScanDirectoryAsync(@"C:\MyFolder", recursive: true);
-
-// Method 2: Using ClamBatchProcessor (more control)
-var processor = new ClamBatchProcessor(clam, maxConcurrency: 4);
-var results = await processor.ScanDirectoryAsync(@"C:\MyFolder", recursive: true);
-
-// Method 3: Scan specific file types only
-var results = await clam.BatchScanExecutableFilesAsync(@"C:\MyFolder", recursive: true);
+// ASP.NET Core – swap the implementation without changing any other code
+builder.Services.AddScoped<IVirusScanner, MyRestScanner>();
+// or
+builder.Services.AddScoped<IVirusScanner, ClamAvScanner>(_ => new ClamAvScanner("localhost", 3310));
 ```
 
-### Batch Processing Features
-- ✅ **Concurrent Scanning**: Process multiple files simultaneously (configurable concurrency)
-- ✅ **Progress Tracking**: Real-time progress updates with callbacks
-- ✅ **Directory Scanning**: Recursive and non-recursive directory scanning
-- ✅ **File Filtering**: Scan by extensions or predefined categories (executables, documents, etc.)
-- ✅ **Connection Resilience**: Graceful handling of ClamAV daemon disconnections
-- ✅ **Timeout Management**: Configurable timeouts to prevent hanging operations
-- ✅ **Error Resilience**: Comprehensive error handling and reporting
-- ✅ **Result Analysis**: Built-in statistics, filtering, and export capabilities
-- ✅ **Memory Efficient**: Optimized for large file sets
+The same principle applies to `IBatchProcessor` – implement it to add batch support to any provider.
 
-### Available Extension Methods
-```csharp
-// Scan multiple files
-await clam.BatchScanFilesAsync(filePaths);
+## Contributing
 
-// Scan directory
-await clam.BatchScanDirectoryAsync(@"C:\MyFolder", recursive: true);
-
-// Scan by file extensions
-await clam.BatchScanByExtensionsAsync(@"C:\MyFolder", new[] {".exe", ".dll"});
-
-// Scan executable files only
-await clam.BatchScanExecutableFilesAsync(@"C:\MyFolder", recursive: true);
-
-// Scan high-risk files only
-await clam.BatchScanHighRiskFilesAsync(@"C:\MyFolder", recursive: true);
-```
-
-### Connection Resilience Example
-```csharp
-// Create processor with timeout to prevent hanging
-var processor = new ClamBatchProcessor(clam, 
-	maxConcurrency: 4, 
-	connectionTimeoutSeconds: 10);
-
-// Always check connection before batch operations
-if (!await clam.TryPingAsync())
-{
-	Console.WriteLine("ClamAV daemon is not available");
-	return;
-}
-
-// Batch processing will gracefully handle connection failures
-var results = await processor.ScanDirectoryAsync(@"C:\MyFolder");
-
-// Check for connection-related failures
-var connectionErrors = results.Where(r => 
-	r.ErrorMessage?.Contains("Connection") == true);
-
-if (connectionErrors.Any())
-{
-	Console.WriteLine($"{connectionErrors.Count()} files failed due to connection issues");
-}
-```
-```csharp
-var progress = new Progress<ClamBatchProgress>(p =>
-{
-	Console.WriteLine($"Progress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%)");
-	Console.WriteLine($"Current: {Path.GetFileName(p.CurrentFile)}");
-});
-
-var results = await clam.BatchScanDirectoryAsync(@"C:\MyFolder", 
-	recursive: true, 
-	progressCallback: progress);
-```
-
-### Result Analysis and Export
-```csharp
-// Get detailed statistics
-var stats = ClamBatchUtilities.GetStatistics(results);
-Console.WriteLine($"Clean: {stats.CleanFiles}, Infected: {stats.InfectedFiles}");
-Console.WriteLine($"Infection Rate: {stats.InfectionRate:F2}%");
-
-// Filter results
-var infectedFiles = ClamBatchUtilities.GetInfectedFiles(results);
-var cleanFiles = ClamBatchUtilities.GetCleanFiles(results);
-
-// Export to CSV for analysis
-await ClamBatchUtilities.SaveToCsvAsync(results, "scan_results.csv");
-
-// Generate detailed report
-var report = ClamBatchUtilities.GenerateReport(results, DateTime.Now);
-```
-
-### Predefined File Categories
-```csharp
-// Use built-in file extension categories
-ClamBatchUtilities.CommonExtensions.Executable  // .exe, .dll, .bat, etc.
-ClamBatchUtilities.CommonExtensions.Document    // .pdf, .docx, .xlsx, etc.
-ClamBatchUtilities.CommonExtensions.Archive     // .zip, .rar, .7z, etc.
-ClamBatchUtilities.CommonExtensions.HighRisk    // High-priority security scan targets
-```
-
-# ClamAV Setup for Windows
-For directions on setting up ClamAV as a Windows Service, check out [this blog post](http://architectryan.com/2011/05/19/nclam-a-dotnet-library-to-virus-scan/).
-
-# Test Application
-For more information about how to use nClam, you can look at the nClam.ConsoleTest project's [Program.cs](https://github.com/KevinKrueger/nClam/blob/master/nClam.ConsoleTest/Program.cs).
-
-# Contributing
-I accept PRs!  We have had several contributors help maintain this library by fixing bugs, introducing async support, and moving to .NET Core.  Thank you to all the contributors!
+PRs are welcome! See [VirusScanner.ConsoleTest/Program.cs](https://github.com/KevinKrueger/VirusScanner/blob/master/VirusScanner.ConsoleTest/Program.cs) for a full usage example.

@@ -2,24 +2,21 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard2.1;net10.0</TargetFrameworks>
-    <Copyright>Apache License Version 2.0</Copyright>
-    <Company>nClam Team</Company>
-    <Version>8.0.0</Version>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <PropertyGroup>
-    <PackageId>nClam</PackageId>
-    <PackageVersion>8.0.0</PackageVersion>
+    <PackageId>VirusScanner.ClamAV</PackageId>
+    <PackageVersion>1.0.0</PackageVersion>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/kevinkrueger/nClam</PackageProjectUrl>
-    <Description>A library to talk to a ClamAV server and perform virus scanning.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/KevinKrueger/VirusScanner</PackageProjectUrl>
+    <Description>ClamAV provider for VirusScanner. A library to talk to a ClamAV server and perform virus scanning.</Description>
     <PackageTags>clamav virus clam clamd nclam scan</PackageTags>
-    <Authors>rhoffman</Authors>
+    <Authors>Kevin Krüger</Authors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,8 +24,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\VirusScanner.Core\VirusScanner.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>nClam.Tests</_Parameter1>
+      <_Parameter1>VirusScanner.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
+
 </Project>
+

@@ -1,25 +1,25 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
-using nClam;
-using nClam.ConsoleTest;
+using VirusScanner.ClamAV;
+using VirusScanner.Core;
+using VirusScanner.ConsoleTest;
 
 class Program
 {
     static async Task Main(string[] args)
     {
-        Console.WriteLine("nClam Test Application with Batch Processing");
+        Console.WriteLine("VirusScanner.ClamAV â€“ Test Application");
         Console.WriteLine();
 
         Console.Write("\t* Testing connectivity: ");
 
-        var clam = new ClamClient("localhost", 3310, 1_000_000_000);
-        if (!await ClamDiagnostics.DisplayClamInfoAsync(clam))
+        var scanner = new ClamAvScanner("localhost", 3310, 1_000_000_000);
+        if (!await ClamDiagnostics.DisplayClamInfoAsync(scanner))
         {
-            Console.WriteLine("\n❌ Cannot proceed without ClamAV connection");
+            Console.WriteLine("\nâŒ Cannot proceed without ClamAV connection");
             Console.WriteLine("Press any key to exit...");
             Console.ReadKey();
             return;
@@ -27,7 +27,6 @@ class Program
 
         Console.WriteLine("connected.");
 
-        // Show menu for different scanning options
         Console.WriteLine("\nSelect scanning option:");
         Console.WriteLine("1. Single file scan");
         Console.WriteLine("2. Batch scan directory");
@@ -40,25 +39,25 @@ class Program
         switch (choice)
         {
             case "1":
-                await ScanSingleFile(clam);
+                await ScanSingleFile(scanner);
                 break;
             case "2":
-                await BatchScanDirectory(clam);
+                await BatchScanDirectory(scanner);
                 break;
             case "3":
-                await BatchScanByExtensions(clam);
+                await BatchScanByExtensions(scanner);
                 break;
             case "4":
-                await BatchScanSpecificFiles(clam);
+                await BatchScanSpecificFiles(scanner);
                 break;
             default:
                 Console.WriteLine("Invalid choice. Defaulting to single file scan.");
-                await ScanSingleFile(clam);
+                await ScanSingleFile(scanner);
                 break;
         }
     }
 
-    static async Task ScanSingleFile(ClamClient clam)
+    static async Task ScanSingleFile(ClamAvScanner scanner)
     {
         Console.WriteLine("\n--- Single File Scan ---");
         Console.Write("Enter file path: ");
@@ -66,26 +65,27 @@ class Program
 
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
         {
-            Console.WriteLine("File not found. Using default test file.");
-            filePath = @"C:\Users\Kevin\Documents\Outlook-Dateien\test.txt";
+            Console.WriteLine("File not found.");
+            return;
         }
 
         try
         {
             Console.Write($"\t* Scanning file: {Path.GetFileName(filePath)}...");
-            var scanResult = await clam.SendAndScanFileAsync(File.ReadAllBytes(filePath));
+            var scanResult = await scanner.ScanAsync(filePath);
 
-            switch (scanResult.Result)
+            switch (scanResult.Status)
             {
-                case ClamScanResults.Clean:
+                case ScanStatus.Clean:
                     Console.WriteLine(" The file is clean!");
                     break;
-                case ClamScanResults.VirusDetected:
+                case ScanStatus.VirusDetected:
                     Console.WriteLine(" Virus Found!");
-                    Console.WriteLine($"Virus name: {scanResult.InfectedFiles.First().VirusName}");
+                    Console.WriteLine($"Virus name: {scanResult.InfectedFiles?.First().VirusName}");
                     break;
-                case ClamScanResults.Error:
-                    Console.WriteLine($" Error occurred! Error: {scanResult.RawResult}");
+                case ScanStatus.Error:
+                    var raw = (scanResult as ClamAvScanResult)?.RawResult ?? "Scan error";
+                    Console.WriteLine($" Error occurred! {raw}");
                     break;
             }
         }
@@ -95,7 +95,7 @@ class Program
         }
     }
 
-    static async Task BatchScanDirectory(ClamClient clam)
+    static async Task BatchScanDirectory(ClamAvScanner scanner)
     {
         Console.WriteLine("\n--- Batch Directory Scan ---");
         Console.Write("Enter directory path: ");
@@ -110,16 +110,14 @@ class Program
         Console.Write("Include subdirectories? (y/n): ");
         var recursive = Console.ReadLine()?.ToLower().StartsWith("y") == true;
 
-        var batchProcessor = new ClamBatchProcessor(clam, maxConcurrency: 3);
-        var progress = new Progress<ClamBatchProgress>(p =>
-        {
-            Console.Write($"\rProgress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%) - {p.CurrentFile}");
-        });
+        var processor = new ClamAvBatchProcessor(scanner, maxConcurrency: 3);
+        var progress = new Progress<BatchProgress>(p =>
+            Console.Write($"\rProgress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%) - {p.CurrentFile}"));
 
         try
         {
             Console.WriteLine($"\nScanning directory: {directoryPath}");
-            var results = await batchProcessor.ScanDirectoryAsync(directoryPath, "*", recursive, progressCallback: progress);
+            var results = await processor.ScanDirectoryAsync(directoryPath, "*", recursive, progressCallback: progress);
 
             Console.WriteLine("\n\nScan Results:");
             DisplayBatchResults(results);
@@ -130,7 +128,7 @@ class Program
         }
     }
 
-    static async Task BatchScanByExtensions(ClamClient clam)
+    static async Task BatchScanByExtensions(ClamAvScanner scanner)
     {
         Console.WriteLine("\n--- Batch Scan by Extensions ---");
         Console.Write("Enter directory path: ");
@@ -145,22 +143,20 @@ class Program
         Console.Write("Enter file extensions (comma-separated, e.g., .exe,.dll,.pdf): ");
         var extensionsInput = Console.ReadLine();
         var extensions = extensionsInput?.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                       .Select(ext => ext.Trim())
-                                       .ToArray() ?? new[] { ".exe", ".dll" };
+                                        .Select(ext => ext.Trim())
+                                        .ToArray() ?? new[] { ".exe", ".dll" };
 
         Console.Write("Include subdirectories? (y/n): ");
         var recursive = Console.ReadLine()?.ToLower().StartsWith("y") == true;
 
-        var batchProcessor = new ClamBatchProcessor(clam, maxConcurrency: 3);
-        var progress = new Progress<ClamBatchProgress>(p =>
-        {
-            Console.Write($"\rProgress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%) - {p.CurrentFile}");
-        });
+        var processor = new ClamAvBatchProcessor(scanner, maxConcurrency: 3);
+        var progress = new Progress<BatchProgress>(p =>
+            Console.Write($"\rProgress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%) - {p.CurrentFile}"));
 
         try
         {
             Console.WriteLine($"\nScanning files with extensions: {string.Join(", ", extensions)}");
-            var results = await batchProcessor.ScanByExtensionsAsync(directoryPath, extensions, recursive, progressCallback: progress);
+            var results = await processor.ScanByExtensionsAsync(directoryPath, extensions, recursive, progressCallback: progress);
 
             Console.WriteLine("\n\nScan Results:");
             DisplayBatchResults(results);
@@ -171,7 +167,7 @@ class Program
         }
     }
 
-    static async Task BatchScanSpecificFiles(ClamClient clam)
+    static async Task BatchScanSpecificFiles(ClamAvScanner scanner)
     {
         Console.WriteLine("\n--- Batch Scan Specific Files ---");
         Console.WriteLine("Enter file paths (one per line, empty line to finish):");
@@ -179,26 +175,22 @@ class Program
         var filePaths = new List<string>();
         string? input;
         while (!string.IsNullOrEmpty(input = Console.ReadLine()))
-        {
             filePaths.Add(input);
-        }
 
         if (!filePaths.Any())
         {
-            Console.WriteLine("No files specified. Adding some default files.");
+            Console.WriteLine("No files specified. Adding files from current directory.");
             filePaths.AddRange(Directory.GetFiles(Directory.GetCurrentDirectory(), "*.*").Take(5));
         }
 
-        var batchProcessor = new ClamBatchProcessor(clam, maxConcurrency: 3);
-        var progress = new Progress<ClamBatchProgress>(p =>
-        {
-            Console.Write($"\rProgress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%) - {Path.GetFileName(p.CurrentFile)}");
-        });
+        var processor = new ClamAvBatchProcessor(scanner, maxConcurrency: 3);
+        var progress = new Progress<BatchProgress>(p =>
+            Console.Write($"\rProgress: {p.CompletedFiles}/{p.TotalFiles} ({p.PercentageComplete:F1}%) - {Path.GetFileName(p.CurrentFile)}"));
 
         try
         {
             Console.WriteLine($"\nScanning {filePaths.Count} files...");
-            var results = await batchProcessor.ScanFilesAsync(filePaths, progressCallback: progress);
+            var results = await processor.ScanFilesAsync(filePaths, progressCallback: progress);
 
             Console.WriteLine("\n\nScan Results:");
             DisplayBatchResults(results);
@@ -209,19 +201,19 @@ class Program
         }
     }
 
-    static void DisplayBatchResults(IEnumerable<ClamBatchScanResult> results)
+    static void DisplayBatchResults(IEnumerable<BatchScanResult> results)
     {
         var resultList = results.ToList();
         var cleanCount = resultList.Count(r => r.IsClean);
         var infectedCount = resultList.Count(r => r.IsInfected);
         var errorCount = resultList.Count(r => r.HasError);
 
-        Console.WriteLine($"\n📊 Summary: {cleanCount} Clean | {infectedCount} Infected | {errorCount} Errors");
+        Console.WriteLine($"\nðŸ“Š Summary: {cleanCount} Clean | {infectedCount} Infected | {errorCount} Errors");
         Console.WriteLine(new string('-', 80));
 
         foreach (var result in resultList)
         {
-            var status = result.IsClean ? "✅ CLEAN" : result.IsInfected ? "🦠 INFECTED" : "❌ ERROR";
+            var status = result.IsClean ? "âœ… CLEAN" : result.IsInfected ? "ðŸ¦  INFECTED" : "âŒ ERROR";
             var fileSize = result.FileSize > 0 ? $"({result.FileSize:N0} bytes)" : "";
             var duration = result.ScanDuration.TotalMilliseconds > 0 ? $"({result.ScanDuration.TotalMilliseconds:F0}ms)" : "";
 
@@ -230,13 +222,11 @@ class Program
             if (result.IsInfected && result.ScanResult?.InfectedFiles?.Any() == true)
             {
                 foreach (var infection in result.ScanResult.InfectedFiles)
-                {
-                    Console.WriteLine($"             └─ Virus: {infection.VirusName}");
-                }
+                    Console.WriteLine($"             â””â”€ Virus: {infection.VirusName}");
             }
             else if (result.HasError && !string.IsNullOrEmpty(result.ErrorMessage))
             {
-                Console.WriteLine($"             └─ Error: {result.ErrorMessage}");
+                Console.WriteLine($"             â””â”€ Error: {result.ErrorMessage}");
             }
         }
 
@@ -245,3 +235,4 @@ class Program
         Console.WriteLine($"Total scan time: {totalDuration:F0}ms");
     }
 }
+

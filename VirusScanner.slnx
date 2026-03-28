@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Folder Name="/src/">
+    <Project Path="VirusScanner.Core/VirusScanner.Core.csproj" />
+    <Project Path="VirusScanner.ClamAV/VirusScanner.ClamAV.csproj" />
+  </Folder>
+  <Folder Name="/Console Examples/">
+    <Project Path="VirusScanner.ConsoleTest/VirusScanner.ConsoleTest.csproj" />
+  </Folder>
+  <Project Path="VirusScanner.Tests/VirusScanner.Tests.csproj" />
+</Solution>
+

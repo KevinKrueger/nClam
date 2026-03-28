@@ -4,9 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using nClam;
+using VirusScanner.ClamAV;
+using VirusScanner.Core;
 
-namespace nClam.ConsoleTest
+namespace VirusScanner.ConsoleTest
 {
     /// <summary>
     /// Example demonstrating resilient batch processing that handles ClamAV daemon failures gracefully
@@ -18,7 +19,7 @@ namespace nClam.ConsoleTest
             Console.WriteLine("🛡️ Resilient Batch Processing Example");
             Console.WriteLine("This example shows how to handle ClamAV daemon disconnections gracefully.\n");
 
-            var clam = new ClamClient("localhost", 3310);
+            var clam = new ClamAvScanner("localhost", 3310);
 
             // Example 1: Connection Check Before Batch Processing
             await Example1_PreConnectionCheck(clam);
@@ -34,7 +35,7 @@ namespace nClam.ConsoleTest
             await Example3_ErrorTracking(clam);
         }
 
-        private static async Task Example1_PreConnectionCheck(ClamClient clam)
+        private static async Task Example1_PreConnectionCheck(ClamAvScanner clam)
         {
             Console.WriteLine("📋 Example 1: Pre-Connection Check");
             Console.WriteLine("Always check ClamAV availability before starting batch operations.\n");
@@ -67,7 +68,7 @@ namespace nClam.ConsoleTest
                 if (testFiles.Any())
                 {
                     Console.WriteLine($"\n📁 Testing batch scan with {testFiles.Length} files...");
-                    var processor = new ClamBatchProcessor(clam, maxConcurrency: 2, connectionTimeoutSeconds: 5);
+                    var processor = new ClamAvBatchProcessor(clam, maxConcurrency: 2, connectionTimeoutSeconds: 5);
                     var results = await processor.ScanFilesAsync(testFiles);
                     
                     var successful = results.Count(r => r.Success);
@@ -82,12 +83,12 @@ namespace nClam.ConsoleTest
             }
         }
 
-        private static async Task Example2_TimeoutHandling(ClamClient clam)
+        private static async Task Example2_TimeoutHandling(ClamAvScanner clam)
         {
             Console.WriteLine("📋 Example 2: Timeout and Connection Error Handling");
             Console.WriteLine("Demonstrates graceful handling when ClamAV becomes unavailable during scanning.\n");
 
-            var processor = new ClamBatchProcessor(clam, maxConcurrency: 2, connectionTimeoutSeconds: 3);
+            var processor = new ClamAvBatchProcessor(clam, maxConcurrency: 2, connectionTimeoutSeconds: 3);
 
             // Create a list of files to scan (even if they don't exist, for demo)
             var testFiles = new[]
@@ -103,7 +104,7 @@ namespace nClam.ConsoleTest
                 Console.WriteLine("🔄 Starting scan with short timeout (3 seconds)...");
                 Console.WriteLine("If ClamAV container stops during this, you'll see graceful error handling.\n");
 
-                var progress = new Progress<ClamBatchProgress>(p =>
+                var progress = new Progress<BatchProgress>(p =>
                 {
                     Console.Write($"\r📊 Progress: {p.CompletedFiles}/{p.TotalFiles} " +
                                  $"({p.PercentageComplete:F0}%) - {p.CurrentFile}");
@@ -146,14 +147,13 @@ namespace nClam.ConsoleTest
             }
         }
 
-        private static async Task Example3_ErrorTracking(ClamClient clam)
+        private static async Task Example3_ErrorTracking(ClamAvScanner clam)
         {
             Console.WriteLine("📋 Example 3: Advanced Error Tracking and Recovery");
             Console.WriteLine("Shows how to monitor and report on different types of scanning failures.\n");
 
             try
             {
-                // Get some real files to scan
                 var currentDir = Directory.GetCurrentDirectory();
                 var realFiles = Directory.GetFiles(currentDir)
                     .Take(5)
@@ -167,12 +167,12 @@ namespace nClam.ConsoleTest
 
                 Console.WriteLine($"📂 Scanning {realFiles.Count} files from: {currentDir}");
 
-                var processor = new ClamBatchProcessor(clam, maxConcurrency: 3, connectionTimeoutSeconds: 8);
-                
+                var processor = new ClamAvBatchProcessor(clam, maxConcurrency: 3, connectionTimeoutSeconds: 8);
+
                 var errorTracker = new Dictionary<string, int>();
                 var startTime = DateTime.Now;
 
-                var progress = new Progress<ClamBatchProgress>(p =>
+                var progress = new Progress<BatchProgress>(p =>
                 {
                     var elapsed = DateTime.Now - startTime;
                     Console.Write($"\r⏱️ {elapsed:mm\\:ss} | Progress: {p.CompletedFiles}/{p.TotalFiles} " +

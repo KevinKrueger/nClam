@@ -1,6 +1,6 @@
-namespace nClam
+namespace VirusScanner.Core
 {
-    public enum ClamScanResults
+    public enum ScanStatus
     {
         /// <summary>
         /// Indicates the value is not set.

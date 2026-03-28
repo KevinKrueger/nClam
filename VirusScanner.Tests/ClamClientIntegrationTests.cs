@@ -5,8 +5,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using VirusScanner.ClamAV;
+using VirusScanner.Core;
 
-namespace nClam.Tests
+namespace VirusScanner.Tests
 {
     [TestFixture]
     [Category("Integration")]
@@ -16,13 +18,13 @@ namespace nClam.Tests
         private const int ClamPort = 3310;
         private const string EicarTestString = @"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
 
-        private ClamClient _client = null!;
+        private ClamAvScanner _client = null!;
         private bool _serverAvailable;
 
         [SetUp]
         public async Task SetUp()
         {
-            _client = new ClamClient(ClamHost, ClamPort);
+            _client = new ClamAvScanner(ClamHost, ClamPort);
             _serverAvailable = await _client.TryPingAsync();
         }
 
@@ -92,7 +94,7 @@ namespace nClam.Tests
             RequireServer();
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(EicarTestString));
             var result = await _client.SendAndScanFileAsync(stream);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.VirusDetected));
             Assert.That(result.InfectedFiles, Is.Not.Null);
             Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
             Assert.That(result.InfectedFiles[0].VirusName.ToUpperInvariant(), Does.Contain("EICAR"));
@@ -104,7 +106,7 @@ namespace nClam.Tests
             RequireServer();
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await _client.SendAndScanFileAsync(data);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.VirusDetected));
             Assert.That(result.InfectedFiles, Is.Not.Null);
             Assert.That(result.InfectedFiles, Has.Count.EqualTo(1));
         }
@@ -115,7 +117,7 @@ namespace nClam.Tests
             RequireServer();
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes("This is perfectly safe content."));
             var result = await _client.SendAndScanFileAsync(stream);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.Clean));
             Assert.That(result.InfectedFiles, Is.Null);
         }
 
@@ -125,7 +127,7 @@ namespace nClam.Tests
             RequireServer();
             var data = Encoding.UTF8.GetBytes("Completely harmless file content.");
             var result = await _client.SendAndScanFileAsync(data);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.Clean));
         }
 
         [Test]
@@ -133,7 +135,7 @@ namespace nClam.Tests
         {
             RequireServer();
             var result = await _client.SendAndScanFileAsync(Array.Empty<byte>());
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.Clean));
         }
 
         [Test]
@@ -143,27 +145,27 @@ namespace nClam.Tests
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await _client.SendAndScanFileAsync(data, cts.Token);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.VirusDetected));
         }
 
         [Test]
         public async Task SendAndScanFileAsync_ViaIPAddress_DetectsEicar()
         {
             RequireServer();
-            var ipClient = new ClamClient(IPAddress.Loopback, ClamPort);
+            var ipClient = new ClamAvScanner(IPAddress.Loopback, ClamPort);
             var data = Encoding.UTF8.GetBytes(EicarTestString);
             var result = await ipClient.SendAndScanFileAsync(data);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.VirusDetected));
         }
 
         [Test]
         public async Task SendAndScanFileAsync_ViaIPAddress_CleanData()
         {
             RequireServer();
-            var ipClient = new ClamClient(IPAddress.Loopback, ClamPort);
+            var ipClient = new ClamAvScanner(IPAddress.Loopback, ClamPort);
             var data = Encoding.UTF8.GetBytes("safe content");
             var result = await ipClient.SendAndScanFileAsync(data);
-            Assert.That(result.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result.Status, Is.EqualTo(ScanStatus.Clean));
         }
 
         [Test]
@@ -197,8 +199,8 @@ namespace nClam.Tests
             RequireServer();
             var result = await _client.ContScanFileOnServerAsync("/nonexistent_path_for_test");
             Assert.That(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
-                $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
+                result.Status == ScanStatus.Error || result.Status == ScanStatus.Unknown, Is.True,
+                $"Expected Error or Unknown, got {result.Status}: {result.RawResult}");
         }
 
         [Test]
@@ -207,8 +209,8 @@ namespace nClam.Tests
             RequireServer();
             var result = await _client.AllMatchScanFileOnServerAsync("/nonexistent_path_for_test");
             Assert.That(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
-                $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
+                result.Status == ScanStatus.Error || result.Status == ScanStatus.Unknown, Is.True,
+                $"Expected Error or Unknown, got {result.Status}: {result.RawResult}");
         }
 
         [Test]
@@ -217,8 +219,8 @@ namespace nClam.Tests
             RequireServer();
             var result = await _client.ScanFileOnServerAsync("/nonexistent_path_for_test");
             Assert.That(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
-                $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
+                result.Status == ScanStatus.Error || result.Status == ScanStatus.Unknown, Is.True,
+                $"Expected Error or Unknown, got {result.Status}: {result.RawResult}");
         }
 
         [Test]
@@ -227,8 +229,8 @@ namespace nClam.Tests
             RequireServer();
             var result = await _client.ScanFileOnServerMultithreadedAsync("/nonexistent_path_for_test");
             Assert.That(
-                result.Result == ClamScanResults.Error || result.Result == ClamScanResults.Unknown, Is.True,
-                $"Expected Error or Unknown, got {result.Result}: {result.RawResult}");
+                result.Status == ScanStatus.Error || result.Status == ScanStatus.Unknown, Is.True,
+                $"Expected Error or Unknown, got {result.Status}: {result.RawResult}");
         }
 
         [Test]
@@ -258,19 +260,19 @@ namespace nClam.Tests
             var cleanData = Encoding.UTF8.GetBytes("clean content");
 
             var result1 = await _client.SendAndScanFileAsync(eicarData);
-            Assert.That(result1.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result1.Status, Is.EqualTo(ScanStatus.VirusDetected));
 
             var result2 = await _client.SendAndScanFileAsync(cleanData);
-            Assert.That(result2.Result, Is.EqualTo(ClamScanResults.Clean));
+            Assert.That(result2.Status, Is.EqualTo(ScanStatus.Clean));
 
             var result3 = await _client.SendAndScanFileAsync(eicarData);
-            Assert.That(result3.Result, Is.EqualTo(ClamScanResults.VirusDetected));
+            Assert.That(result3.Status, Is.EqualTo(ScanStatus.VirusDetected));
         }
 
         [Test]
         public async Task TryPingAsync_WrongPort_ReturnsFalse()
         {
-            var badClient = new ClamClient("localhost", 19999);
+            var badClient = new ClamAvScanner("localhost", 19999);
             var result = await badClient.TryPingAsync();
             Assert.That(result, Is.False);
         }
@@ -278,8 +280,9 @@ namespace nClam.Tests
         [Test]
         public void PingAsync_WrongPort_Throws()
         {
-            var badClient = new ClamClient("localhost", 19999);
+            var badClient = new ClamAvScanner("localhost", 19999);
             Assert.CatchAsync<Exception>(async () => await badClient.PingAsync());
         }
     }
 }
+

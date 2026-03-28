@@ -12,7 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\nClam\nClam.csproj" />
+    <ProjectReference Include="..\VirusScanner.Core\VirusScanner.Core.csproj" />
+    <ProjectReference Include="..\VirusScanner.ClamAV\VirusScanner.ClamAV.csproj" />
   </ItemGroup>
 
 </Project>

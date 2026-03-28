@@ -1,0 +1,25 @@
+mode: Mainline
+next-version: 1.0.0
+
+branches:
+  main:
+    regex: ^master$
+    tag: ''
+  develop:
+    regex: ^develop$
+    tag: alpha
+  release:
+    regex: ^release/
+    tag: beta
+  hotfix:
+    regex: ^hotfix/
+    tag: beta
+  feature:
+    regex: ^feature/
+    tag: useBranchName
+  pull-request:
+    regex: ^(pull|pull-requests|pr)[/-]
+    tag: PullRequest
+    increment: Inherit
+
+merge-message-formats: {}

@@ -1,7 +1,0 @@
-<Solution>
-  <Folder Name="/Console Examples/">
-    <Project Path="nClam.ConsoleTest/nClam.ConsoleTest.csproj" />
-  </Folder>
-  <Project Path="nClam.Tests/nClam.Tests.csproj" />
-  <Project Path="nClam/nClam.csproj" />
-</Solution>

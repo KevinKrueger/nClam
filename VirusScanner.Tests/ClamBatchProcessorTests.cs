@@ -2,24 +2,26 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using VirusScanner.ClamAV;
+using VirusScanner.Core;
 
-namespace nClam.Tests
+namespace VirusScanner.Tests
 {
     [TestFixture]
     public class ClamBatchProcessorTests
     {
-        private ClamClient _clamClient = null!;
+        private ClamAvScanner _clamClient = null!;
         
         [SetUp]
         public void Setup()
         {
-            _clamClient = new ClamClient("localhost", 3310);
+            _clamClient = new ClamAvScanner("localhost", 3310);
         }
 
         [Test]
         public void ClamBatchProcessor_Constructor_SetsPropertiesWithTimeout()
         {
-            var processor = new ClamBatchProcessor(_clamClient, 8, 15);
+            var processor = new ClamAvBatchProcessor(_clamClient, 8, 15);
 
             Assert.That(processor, Is.Not.Null);
         }
@@ -27,7 +29,7 @@ namespace nClam.Tests
         [Test]
         public void ClamBatchProcessor_Constructor_SetsProperties()
         {
-            var processor = new ClamBatchProcessor(_clamClient, 8);
+            var processor = new ClamAvBatchProcessor(_clamClient, 8);
 
             Assert.That(processor, Is.Not.Null);
         }
@@ -35,13 +37,13 @@ namespace nClam.Tests
         [Test]
         public void ClamBatchScanResult_Properties_WorkCorrectly()
         {
-            var result = new ClamBatchScanResult
+            var result = new BatchScanResult
             {
                 FilePath = @"C:\test.exe",
                 FileName = "test.exe",
                 FileSize = 1024,
                 Success = true,
-                ScanResult = new ClamScanResult("stream: OK")
+                ScanResult = new ClamAvScanResult("stream: OK")
             };
 
             Assert.That(result.IsClean, Is.True);
@@ -52,7 +54,7 @@ namespace nClam.Tests
         [Test]
         public void ClamBatchProgress_PercentageComplete_CalculatesCorrectly()
         {
-            var progress = new ClamBatchProgress
+            var progress = new BatchProgress
             {
                 TotalFiles = 100,
                 CompletedFiles = 25
@@ -64,21 +66,21 @@ namespace nClam.Tests
         [Test]
         public void ClamBatchUtilities_CommonExtensions_ArePopulated()
         {
-            Assert.That(ClamBatchUtilities.CommonExtensions.Executable, Is.Not.Empty);
-            Assert.That(ClamBatchUtilities.CommonExtensions.Document, Is.Not.Empty);
-            Assert.That(ClamBatchUtilities.CommonExtensions.Archive, Is.Not.Empty);
-            Assert.That(ClamBatchUtilities.CommonExtensions.HighRisk, Is.Not.Empty);
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.Executable, Is.Not.Empty);
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.Document, Is.Not.Empty);
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.Archive, Is.Not.Empty);
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.HighRisk, Is.Not.Empty);
             
-            Assert.That(ClamBatchUtilities.CommonExtensions.Executable, Contains.Item(".exe"));
-            Assert.That(ClamBatchUtilities.CommonExtensions.Document, Contains.Item(".pdf"));
-            Assert.That(ClamBatchUtilities.CommonExtensions.Archive, Contains.Item(".zip"));
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.Executable, Contains.Item(".exe"));
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.Document, Contains.Item(".pdf"));
+            Assert.That(ClamAvBatchUtilities.CommonExtensions.Archive, Contains.Item(".zip"));
         }
 
         [Test]
         public void ClamBatchUtilities_GetStatistics_WorksWithEmptyResults()
         {
-            var emptyResults = System.Array.Empty<ClamBatchScanResult>();
-            var stats = ClamBatchUtilities.GetStatistics(emptyResults);
+            var emptyResults = System.Array.Empty<BatchScanResult>();
+            var stats = ClamAvBatchUtilities.GetStatistics(emptyResults);
 
             Assert.That(stats.TotalFiles, Is.EqualTo(0));
             Assert.That(stats.CleanFiles, Is.EqualTo(0));
@@ -92,26 +94,26 @@ namespace nClam.Tests
         {
             var results = new[]
             {
-                new ClamBatchScanResult 
+                new BatchScanResult 
                 { 
                     Success = true, 
-                    ScanResult = new ClamScanResult("stream: OK") 
+                    ScanResult = new ClamAvScanResult("stream: OK") 
                 },
-                new ClamBatchScanResult 
+                new BatchScanResult 
                 { 
                     Success = true, 
-                    ScanResult = new ClamScanResult("Win.Test.EICAR_HDB-1 FOUND") 
+                    ScanResult = new ClamAvScanResult("Win.Test.EICAR_HDB-1 FOUND") 
                 },
-                new ClamBatchScanResult 
+                new BatchScanResult 
                 { 
                     Success = false, 
                     ErrorMessage = "File not found" 
                 }
             };
 
-            var clean = ClamBatchUtilities.GetCleanFiles(results);
-            var infected = ClamBatchUtilities.GetInfectedFiles(results);
-            var errors = ClamBatchUtilities.GetErrorFiles(results);
+            var clean = ClamAvBatchUtilities.GetCleanFiles(results);
+            var infected = ClamAvBatchUtilities.GetInfectedFiles(results);
+            var errors = ClamAvBatchUtilities.GetErrorFiles(results);
 
             Assert.That(clean.Count(), Is.EqualTo(1));
             Assert.That(infected.Count(), Is.EqualTo(1));
